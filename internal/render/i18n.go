@@ -171,9 +171,11 @@ func localizeNote(note analysis.Note, lang string) string {
 	if lang == "en" {
 		switch note.Code {
 		case analysis.NoteDependencyReviewFallback:
-			return "Dependency review API was unavailable, so lockfile-only fallback analysis was used."
+			return "Dependency review API was unavailable, so local fallback analysis was used."
 		case analysis.NoteNonRegistrySource:
 			return fmt.Sprintf("%s resolves from a non-default package source: %s", note.Dependency, note.Detail)
+		case analysis.NoteUnsupportedDependency:
+			return fmt.Sprintf("Some dependency entries were not analyzed by local fallback: %s", note.Detail)
 		default:
 			return note.Code
 		}
@@ -205,9 +207,9 @@ func localizeSummaryTransitive(count int, lang string) string {
 
 func localizeSummaryFallback(lang string) string {
 	if lang == "en" {
-		return "Dependency Review was unavailable, so lockfile-only fallback analysis was used."
+		return "Dependency Review was unavailable, so local fallback analysis was used."
 	}
-	return "Dependency Review를 사용할 수 없어 lockfile-only fallback 분석을 사용했습니다."
+	return "Dependency Review를 사용할 수 없어 local fallback 분석을 사용했습니다."
 }
 
 func localizeSummarySources(names []string, lang string) string {

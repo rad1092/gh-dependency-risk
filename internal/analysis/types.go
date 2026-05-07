@@ -79,6 +79,7 @@ const (
 	NoteDependencyReviewFallback = "dependency_review_unavailable"
 	NoteNonRegistrySource        = "non_registry_source"
 	NoteApproximateAttribution   = "approximate_target_attribution"
+	NoteUnsupportedDependency    = "unsupported_dependency_entry"
 )
 
 type AnalysisTarget struct {

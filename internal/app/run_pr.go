@@ -15,6 +15,7 @@ import (
 	"gh-dep-risk/internal/analysis"
 	ghclient "gh-dep-risk/internal/github"
 	"gh-dep-risk/internal/npm"
+	pythondeps "gh-dep-risk/internal/python"
 	"gh-dep-risk/internal/render"
 )
 
@@ -107,10 +108,19 @@ func RunPR(ctx context.Context, deps RunPRDependencies, opts RunPROptions) error
 
 	now := time.Now().UTC()
 	inputs := make([]analysis.Input, 0, len(resolvedTargets))
+	localInputs := make([]analysis.LocalInput, 0)
 	for _, target := range resolvedTargets {
 		reviewChanges := append([]analysis.ReviewChange(nil), reviewSnapshot.TargetChanges[target.Key()]...)
 		if !reviewSnapshot.Available && !target.LocalFallback {
-			return &ExitError{Code: 1, Err: fmt.Errorf("dependency review is unavailable and %s cannot be analyzed with local fallback in this release. Pass a PR from a repository where GitHub dependency review is enabled, or narrow to an npm/pnpm/yarn target with a supported lockfile", target.ManifestPath)}
+			return &ExitError{Code: 1, Err: fmt.Errorf("dependency review is unavailable and %s cannot be analyzed with local fallback in this release. Pass a PR from a repository where GitHub dependency review is enabled, or narrow to an npm/pnpm/yarn/python direct target with a supported manifest", target.ManifestPath)}
+		}
+		if shouldUsePythonLocalFallback(target, reviewSnapshot.Available) {
+			input, err := loadPythonLocalInput(ctx, cache, pr.BaseSHA, pr.HeadSHA, target)
+			if err != nil {
+				return &ExitError{Code: 1, Err: err}
+			}
+			localInputs = append(localInputs, input)
+			continue
 		}
 		baseManifest, headManifest, baseLockfile, headLockfile, err := loadLocalTargetData(ctx, cache, pr.BaseSHA, pr.HeadSHA, target, reviewSnapshot.Available)
 		if err != nil {
@@ -141,7 +151,8 @@ func RunPR(ctx context.Context, deps RunPRDependencies, opts RunPROptions) error
 		}
 	}
 
-	targetResults := make([]analysis.TargetAnalysisResult, 0, len(inputs))
+	targetResults := make([]analysis.TargetAnalysisResult, 0, len(inputs)+len(localInputs))
+	unsupportedOnly := false
 	for _, input := range inputs {
 		result := analysis.Analyze(input, publishedAt)
 		if !analysis.HasMeaningfulChange(result) {
@@ -149,7 +160,20 @@ func RunPR(ctx context.Context, deps RunPRDependencies, opts RunPROptions) error
 		}
 		targetResults = append(targetResults, analysis.TargetResult(input.Target, result))
 	}
+	for _, input := range localInputs {
+		result := analysis.AnalyzeLocalDirectDependencies(input)
+		if !analysis.HasMeaningfulChange(result) {
+			if hasUnsupportedDependencyNote(result.Notes) {
+				unsupportedOnly = true
+			}
+			continue
+		}
+		targetResults = append(targetResults, analysis.TargetResult(input.Target, result))
+	}
 	if len(targetResults) == 0 {
+		if unsupportedOnly {
+			fmt.Fprintln(deps.Stderr, "unsupported dependency entries were present, but no supported dependency change was found")
+		}
 		return &ExitError{Code: 2, Err: errors.New("no supported dependency change found")}
 	}
 	result := analysis.AggregateResults(targetResults)
@@ -343,4 +367,101 @@ func loadLocalTargetData(ctx context.Context, cache *repoDataCache, baseSHA, hea
 		return nil, nil, nil, nil, err
 	}
 	return baseManifest, headManifest, baseLockfile, headLockfile, nil
+}
+
+func shouldUsePythonLocalFallback(target analysis.AnalysisTarget, dependencyReviewAvailable bool) bool {
+	if dependencyReviewAvailable {
+		return false
+	}
+	switch target.PackageManager {
+	case "pip", "pyproject":
+		return true
+	default:
+		return false
+	}
+}
+
+func loadPythonLocalInput(ctx context.Context, cache *repoDataCache, baseSHA, headSHA string, target analysis.AnalysisTarget) (analysis.LocalInput, error) {
+	baseData, err := cache.file(ctx, baseSHA, target.ManifestPath)
+	if err != nil {
+		return analysis.LocalInput{}, err
+	}
+	headData, err := cache.file(ctx, headSHA, target.ManifestPath)
+	if err != nil {
+		return analysis.LocalInput{}, err
+	}
+	baseResult, err := parsePythonManifest(target.ManifestPath, baseData)
+	if err != nil {
+		return analysis.LocalInput{}, err
+	}
+	headResult, err := parsePythonManifest(target.ManifestPath, headData)
+	if err != nil {
+		return analysis.LocalInput{}, err
+	}
+
+	return analysis.LocalInput{
+		Target:                    target,
+		DependencyReviewAvailable: false,
+		BaseDependencies:          convertPythonDependencies(baseResult.Dependencies),
+		HeadDependencies:          convertPythonDependencies(headResult.Dependencies),
+		Unsupported:               convertPythonUnsupported(target.ManifestPath, baseResult.Unsupported, headResult.Unsupported),
+	}, nil
+}
+
+func parsePythonManifest(manifestPath string, data []byte) (pythondeps.ParseResult, error) {
+	switch path.Base(manifestPath) {
+	case "requirements.txt":
+		return pythondeps.ParseRequirements(data)
+	case "pyproject.toml":
+		return pythondeps.ParsePyProject(data)
+	default:
+		return pythondeps.ParseResult{}, fmt.Errorf("unsupported Python manifest %s", manifestPath)
+	}
+}
+
+func convertPythonDependencies(dependencies []pythondeps.Dependency) []analysis.LocalDependency {
+	converted := make([]analysis.LocalDependency, 0, len(dependencies))
+	for _, dependency := range dependencies {
+		converted = append(converted, analysis.LocalDependency{
+			Name:        dependency.Name,
+			Requirement: dependency.Requirement,
+			Version:     dependency.Version,
+			Source:      dependency.Source,
+			Scope:       pythonScope(dependency.Scope),
+		})
+	}
+	return converted
+}
+
+func pythonScope(scope pythondeps.Scope) analysis.DependencyScope {
+	switch scope {
+	case pythondeps.ScopeOptional:
+		return analysis.ScopeOptional
+	default:
+		return analysis.ScopeRuntime
+	}
+}
+
+func convertPythonUnsupported(manifestPath string, groups ...[]pythondeps.UnsupportedEntry) []analysis.LocalUnsupportedEntry {
+	converted := []analysis.LocalUnsupportedEntry{}
+	for _, group := range groups {
+		for _, entry := range group {
+			converted = append(converted, analysis.LocalUnsupportedEntry{
+				Manifest: manifestPath,
+				Line:     entry.Line,
+				Text:     entry.Text,
+				Reason:   entry.Reason,
+			})
+		}
+	}
+	return converted
+}
+
+func hasUnsupportedDependencyNote(notes []analysis.Note) bool {
+	for _, note := range notes {
+		if note.Code == analysis.NoteUnsupportedDependency {
+			return true
+		}
+	}
+	return false
 }

@@ -15,7 +15,7 @@
   "dependency_review_available": false,
   "summary": [
     "1 dependency changes were detected.",
-    "Dependency Review was unavailable, so lockfile-only fallback analysis was used.",
+    "Dependency Review was unavailable, so local fallback analysis was used.",
     "Top risk signals: major version bump, install script."
   ],
   "risk_drivers": [

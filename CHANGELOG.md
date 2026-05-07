@@ -4,6 +4,8 @@ All notable changes to `gh-dep-risk` will be documented in this file.
 
 ## Unreleased
 
+- Added Python direct dependency local fallback for `requirements.txt` and PEP
+  621 `pyproject.toml` declarations when Dependency Review is unavailable.
 - Updated public badge, smoke-test, and release documentation to distinguish
   the current `rad1092/gh-dependency-risk` repository slug from the stable
   `rad1092/gh-dep-risk` install path that keeps the command as `gh dep-risk`.

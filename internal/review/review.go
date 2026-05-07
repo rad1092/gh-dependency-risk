@@ -28,18 +28,19 @@ const (
 type PackageManager string
 
 const (
-	PackageManagerUnknown  PackageManager = ""
-	PackageManagerCargo    PackageManager = "cargo"
-	PackageManagerComposer PackageManager = "composer"
-	PackageManagerGo       PackageManager = "go"
-	PackageManagerMaven    PackageManager = "maven"
-	PackageManagerNPM      PackageManager = "npm"
-	PackageManagerPip      PackageManager = "pip"
-	PackageManagerPNPM     PackageManager = "pnpm"
-	PackageManagerPoetry   PackageManager = "poetry"
-	PackageManagerBundler  PackageManager = "bundler"
-	PackageManagerSwiftPM  PackageManager = "swiftpm"
-	PackageManagerYarn     PackageManager = "yarn"
+	PackageManagerUnknown   PackageManager = ""
+	PackageManagerCargo     PackageManager = "cargo"
+	PackageManagerComposer  PackageManager = "composer"
+	PackageManagerGo        PackageManager = "go"
+	PackageManagerMaven     PackageManager = "maven"
+	PackageManagerNPM       PackageManager = "npm"
+	PackageManagerPip       PackageManager = "pip"
+	PackageManagerPyProject PackageManager = "pyproject"
+	PackageManagerPNPM      PackageManager = "pnpm"
+	PackageManagerPoetry    PackageManager = "poetry"
+	PackageManagerBundler   PackageManager = "bundler"
+	PackageManagerSwiftPM   PackageManager = "swiftpm"
+	PackageManagerYarn      PackageManager = "yarn"
 )
 
 type Vulnerability struct {
@@ -207,7 +208,7 @@ func SupportsDependencyReviewEcosystem(ecosystem Ecosystem) bool {
 
 func HasLocalFallback(packageManager PackageManager) bool {
 	switch packageManager {
-	case PackageManagerNPM, PackageManagerPNPM, PackageManagerYarn:
+	case PackageManagerNPM, PackageManagerPip, PackageManagerPyProject, PackageManagerPNPM, PackageManagerYarn:
 		return true
 	default:
 		return false

@@ -11,6 +11,7 @@ import (
 	"gh-dep-risk/internal/analysis"
 	ghclient "gh-dep-risk/internal/github"
 	"gh-dep-risk/internal/npm"
+	pythondeps "gh-dep-risk/internal/python"
 	"gh-dep-risk/internal/review"
 )
 
@@ -336,6 +337,7 @@ func discoverAPIOnlyTargets(ctx context.Context, cache *repoDataCache, baseRef, 
 		base := path.Base(cleaned)
 		var ecosystem review.Ecosystem
 		var manager review.PackageManager
+		localFallback := false
 		switch base {
 		case "Cargo.toml":
 			ecosystem, manager = review.EcosystemCargo, review.PackageManagerCargo
@@ -347,12 +349,22 @@ func discoverAPIOnlyTargets(ctx context.Context, cache *repoDataCache, baseRef, 
 			ecosystem, manager = review.EcosystemMaven, review.PackageManagerMaven
 		case "requirements.txt":
 			ecosystem, manager = review.EcosystemPip, review.PackageManagerPip
+			localFallback = true
 		case "Gemfile":
 			ecosystem, manager = review.EcosystemRubyGems, review.PackageManagerBundler
 		case "Package.swift":
 			ecosystem, manager = review.EcosystemSwiftPM, review.PackageManagerSwiftPM
 		case "pyproject.toml":
-			ok, err := detectPoetryManifest(ctx, cache, baseRef, headRef, cleaned, poetryLockfiles)
+			ok, err := detectPEP621PythonManifest(ctx, cache, baseRef, headRef, cleaned)
+			if err != nil {
+				return nil, err
+			}
+			if ok {
+				ecosystem, manager = review.EcosystemPip, review.PackageManagerPyProject
+				localFallback = true
+				break
+			}
+			ok, err = detectPoetryManifest(ctx, cache, baseRef, headRef, cleaned, poetryLockfiles)
 			if err != nil {
 				return nil, err
 			}
@@ -363,6 +375,10 @@ func discoverAPIOnlyTargets(ctx context.Context, cache *repoDataCache, baseRef, 
 		default:
 			continue
 		}
+		fallbackReason := ""
+		if !localFallback {
+			fallbackReason = fallbackUnavailableReason(ecosystem)
+		}
 		grouped[cleaned] = append(grouped[cleaned], analysis.AnalysisTarget{
 			DisplayName:     displayNameForManifest(cleaned),
 			ManifestPath:    cleaned,
@@ -371,11 +387,28 @@ func discoverAPIOnlyTargets(ctx context.Context, cache *repoDataCache, baseRef, 
 			Ecosystem:       string(ecosystem),
 			TargetID:        review.TargetIdentity(cleaned, ecosystem, manager),
 			OwningDirectory: manifestDir(cleaned),
-			LocalFallback:   false,
-			FallbackReason:  fallbackUnavailableReason(ecosystem),
+			LocalFallback:   localFallback,
+			FallbackReason:  fallbackReason,
 		})
 	}
 	return groupedTargets(grouped), nil
+}
+
+func detectPEP621PythonManifest(ctx context.Context, cache *repoDataCache, baseRef, headRef, manifestPath string) (bool, error) {
+	for _, ref := range []string{baseRef, headRef} {
+		data, err := cache.file(ctx, ref, manifestPath)
+		if err != nil {
+			return false, err
+		}
+		ok, err := pythondeps.HasPEP621Dependencies(data)
+		if err != nil {
+			return false, err
+		}
+		if ok {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 func detectPoetryManifest(ctx context.Context, cache *repoDataCache, baseRef, headRef, manifestPath string, poetryLockfiles map[string]struct{}) (bool, error) {
@@ -918,7 +951,7 @@ func manifestPaths(targets []discoveredTarget) []string {
 
 func fallbackUnavailableReason(ecosystem review.Ecosystem) string {
 	switch ecosystem {
-	case review.EcosystemCargo, review.EcosystemComposer, review.EcosystemGoModules, review.EcosystemMaven, review.EcosystemPip, review.EcosystemPoetry, review.EcosystemRubyGems, review.EcosystemSwiftPM:
+	case review.EcosystemCargo, review.EcosystemComposer, review.EcosystemGoModules, review.EcosystemMaven, review.EcosystemPoetry, review.EcosystemRubyGems, review.EcosystemSwiftPM:
 		return "dependency review is required for this ecosystem in this release"
 	default:
 		return ""

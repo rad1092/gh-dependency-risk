@@ -282,7 +282,8 @@ The score model stays heuristic, deterministic, and intentionally auditable.
 | pnpm | Dependency Review data is used when available. | Local fallback analyzes `package.json`, `pnpm-lock.yaml`, and `pnpm-workspace.yaml` discovery. |
 | Yarn Classic | Dependency Review data is used when available. | Local fallback analyzes `package.json` and classic `yarn.lock`. |
 | Yarn Berry / PnP | Dependency Review data may be surfaced when GitHub provides it. | Local fallback fails honestly when the lockfile cannot be analyzed faithfully. |
-| Cargo, Composer, Go modules, Maven, pip, Poetry, RubyGems, SwiftPM | Dependency Review data may be surfaced when GitHub provides it. | No local fallback in this release. |
+| Python `requirements.txt` / PEP 621 `pyproject.toml` | Dependency Review data is used when available. | Local fallback compares direct dependency declarations only. No resolver, lockfile, or transitive analysis. |
+| Cargo, Composer, Go modules, Maven, Poetry, RubyGems, SwiftPM | Dependency Review data may be surfaced when GitHub provides it. | No local fallback in this release. |
 
 ## Behavior
 
@@ -304,6 +305,9 @@ Supported target shapes:
   `yarn.lock`
 - nested standalone subprojects with their own `package.json` and either
   `package-lock.json`, `pnpm-lock.yaml`, or `yarn.lock`
+- Python `requirements.txt` direct dependency declarations
+- PEP 621 `pyproject.toml` direct dependencies from `[project].dependencies`
+  and `[project.optional-dependencies]`
 
 ### Mixed ecosystems and JS workspaces
 
@@ -346,12 +350,15 @@ Notes:
 - if dependency review is unavailable and the selected target belongs to an
   ecosystem without local fallback support in this release, the command returns
   a clear actionable error instead of pretending to analyze it
+- Python local fallback is declaration-only: unsupported requirement includes,
+  constraints, editable installs, Poetry tables, dependency groups, `poetry.lock`,
+  and `uv.lock` are not resolved in this phase
 - out of scope for now: bun, `package.json5`, `package.yaml`, pnpm catalogs,
-  pnpm branch lockfiles, broad non-JS local fallback, and full Yarn Plug'n'Play
-  graph resolution
+  pnpm branch lockfiles, broad non-JS local fallback, Go module local fallback,
+  and full Yarn Plug'n'Play graph resolution
 
 If dependency review returns `403` or `404`, `gh-dep-risk` falls back to
-lockfile-only analysis and explicitly reports
+supported local fallback analysis and explicitly reports
 `dependency_review_available=false`. Registry publish-age lookups are best
 effort and are skipped with `--no-registry`, but API-provided release-age
 signals remain available when GitHub already supplies them.

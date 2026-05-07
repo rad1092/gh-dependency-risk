@@ -9,18 +9,18 @@
 
 ### Summary
 - 1 dependency changes were detected.
-- Dependency Review was unavailable, so lockfile-only fallback analysis was used.
+- Dependency Review was unavailable, so local fallback analysis was used.
 - Top risk signals: major version bump, install script.
 
 ### Notes
-- Dependency review API was unavailable, so lockfile-only fallback analysis was used.
+- Dependency review API was unavailable, so local fallback analysis was used.
 
 ### Targets
 - `root` (root, ecosystem=npm, score `48`, level `high`, blast `medium`)
   - `left-pad 1.0.0 -> 2.0.0` (updated/runtime, score `48`)
     - The dependency crosses a major version boundary.
     - The package declares an install script.
-  - Dependency review API was unavailable, so lockfile-only fallback analysis was used.
+  - Dependency review API was unavailable, so local fallback analysis was used.
 
 ### Recommended actions
 - Inspect install scripts and published tarballs for left-pad before merging.
