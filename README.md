@@ -24,11 +24,14 @@ fallback. An asciinema-compatible recording is also checked in at
   - pnpm: `package.json`, `pnpm-lock.yaml`
   - pnpm workspace discovery: `pnpm-workspace.yaml`
   - yarn: `package.json`, `yarn.lock` (narrow Yarn Classic / node_modules fallback only)
+  - Python: `requirements.txt` and PEP 621 `pyproject.toml` direct
+    dependency declarations only; no resolver, lockfile, or transitive analysis
 - one Go binary
 - dependency review API first, local fallback only when dependency review is
   unavailable
 - no server, webhook receiver, GitHub App, DB, queue, dashboard, bun, or
-  broad non-JS local fallback in this release
+  broad non-JS local fallback beyond the narrow Python direct-declaration
+  fallback in this release
 
 Dependency Review ecosystems surfaced in this release when GitHub provides
 them:

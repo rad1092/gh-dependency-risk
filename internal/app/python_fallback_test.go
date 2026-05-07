@@ -22,6 +22,12 @@ func TestRunPRPythonRequirementsFallbackAdded(t *testing.T) {
 	if payload.DependencyReviewAvailable {
 		t.Fatalf("expected dependency review fallback, got %#v", payload)
 	}
+	if !hasNote(payload.Notes, analysis.NoteDependencyReviewFallback) {
+		t.Fatalf("expected dependency review fallback note, got %#v", payload.Notes)
+	}
+	if client.getFileCalls == 0 {
+		t.Fatalf("expected Python local fallback to load manifest contents")
+	}
 	change := findChange(t, payload, "fastapi")
 	if change.ChangeType != analysis.ChangeAdded || change.ToVersion != "0.115.0" || change.Scope != analysis.ScopeRuntime || !change.Direct {
 		t.Fatalf("unexpected fastapi change: %#v", change)
@@ -45,6 +51,9 @@ func TestRunPRPythonUsesDependencyReviewWhenAvailable(t *testing.T) {
 	}
 	if hasNote(payload.Notes, analysis.NoteDependencyReviewFallback) {
 		t.Fatalf("did not expect fallback note, got %#v", payload.Notes)
+	}
+	if client.getFileCalls != 0 {
+		t.Fatalf("expected dependency review primary path not to load Python manifests, got %d file calls", client.getFileCalls)
 	}
 	_ = findChange(t, payload, "requests")
 }
@@ -125,6 +134,9 @@ func TestRunPRPythonSupportedAndUnsupportedIncludesNote(t *testing.T) {
 	if !hasNote(payload.Notes, analysis.NoteUnsupportedDependency) {
 		t.Fatalf("expected unsupported note, got %#v", payload.Notes)
 	}
+	if payload.Score != findChange(t, payload, "requests").Score {
+		t.Fatalf("expected unsupported entry not to affect aggregate score, got report score=%d", payload.Score)
+	}
 	_ = findChange(t, payload, "requests")
 }
 
@@ -148,6 +160,65 @@ func TestRunPRPythonListTargetsAndPathFiltering(t *testing.T) {
 	payload := decodeJSONReport(t, stdout)
 	if len(payload.Targets) != 1 || payload.Targets[0].Target.ManifestPath != "requirements.txt" {
 		t.Fatalf("expected requirements target only, got %#v", payload.Targets)
+	}
+
+	stdout, _, err = runPRWithClient(t, client, RunPROptions{Format: "json", Paths: []string{"pyproject.toml"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload = decodeJSONReport(t, stdout)
+	if len(payload.Targets) != 1 || payload.Targets[0].Target.ManifestPath != "pyproject.toml" {
+		t.Fatalf("expected pyproject target only, got %#v", payload.Targets)
+	}
+}
+
+func TestRunPRPythonNestedTargetsAndPathFiltering(t *testing.T) {
+	client := newPythonNestedFakeGitHubClient()
+
+	stdout, _, err := runPRWithClient(t, client, RunPROptions{ListTargets: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, expected := range []string{
+		"services/api [standalone, ecosystem=pip, manager=pip]",
+		"manifest: services/api/requirements.txt",
+		"libs/pkg [standalone, ecosystem=pip, manager=pyproject]",
+		"manifest: libs/pkg/pyproject.toml",
+	} {
+		if !strings.Contains(stdout, expected) {
+			t.Fatalf("expected nested target listing to contain %q, got %q", expected, stdout)
+		}
+	}
+
+	stdout, _, err = runPRWithClient(t, client, RunPROptions{Format: "json", Paths: []string{"libs/pkg/pyproject.toml"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload := decodeJSONReport(t, stdout)
+	if len(payload.Targets) != 1 || payload.Targets[0].Target.ManifestPath != "libs/pkg/pyproject.toml" {
+		t.Fatalf("expected nested pyproject target only, got %#v", payload.Targets)
+	}
+	_ = findChange(t, payload, "requests")
+}
+
+func TestRunPRPythonPoetryOnlyPyProjectIsNotDirectFallbackTarget(t *testing.T) {
+	client := newPythonBaseFakeGitHubClient()
+	client.files = []ghclient.PullRequestFile{{Filename: "pyproject.toml", Status: "modified"}}
+	client.repositoryFilesByRef["base-sha"] = []string{"pyproject.toml"}
+	client.repositoryFilesByRef["head-sha"] = []string{"pyproject.toml"}
+	poetryOnly := []byte("[tool.poetry]\nname = \"demo\"\nversion = \"0.1.0\"\n[tool.poetry.dependencies]\npython = \"^3.12\"\nrequests = \"^2.32\"\n")
+	client.filesByKey[fileKey("pyproject.toml", "base-sha")] = poetryOnly
+	client.filesByKey[fileKey("pyproject.toml", "head-sha")] = poetryOnly
+
+	stdout, _, err := runPRWithClient(t, client, RunPROptions{ListTargets: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(stdout, "root [root, ecosystem=poetry, manager=poetry]") {
+		t.Fatalf("expected Poetry API-only target, got %q", stdout)
+	}
+	if strings.Contains(stdout, "manager=pyproject") {
+		t.Fatalf("did not expect Poetry-only pyproject.toml to be promoted to Python direct fallback, got %q", stdout)
 	}
 }
 
@@ -183,6 +254,21 @@ func newPythonMixedFakeGitHubClient() *fakeGitHubClient {
 	client.filesByKey[fileKey("requirements.txt", "head-sha")] = []byte("fastapi==0.115.0\n")
 	client.filesByKey[fileKey("pyproject.toml", "base-sha")] = []byte("[project]\ndependencies = []\n")
 	client.filesByKey[fileKey("pyproject.toml", "head-sha")] = []byte("[project]\ndependencies = [\"requests==2.32.3\"]\n")
+	return client
+}
+
+func newPythonNestedFakeGitHubClient() *fakeGitHubClient {
+	client := newPythonBaseFakeGitHubClient()
+	client.files = []ghclient.PullRequestFile{
+		{Filename: "services/api/requirements.txt", Status: "modified"},
+		{Filename: "libs/pkg/pyproject.toml", Status: "modified"},
+	}
+	client.repositoryFilesByRef["base-sha"] = []string{"services/api/requirements.txt", "libs/pkg/pyproject.toml"}
+	client.repositoryFilesByRef["head-sha"] = []string{"services/api/requirements.txt", "libs/pkg/pyproject.toml"}
+	client.filesByKey[fileKey("services/api/requirements.txt", "base-sha")] = []byte("")
+	client.filesByKey[fileKey("services/api/requirements.txt", "head-sha")] = []byte("fastapi==0.115.0\n")
+	client.filesByKey[fileKey("libs/pkg/pyproject.toml", "base-sha")] = []byte("[project]\ndependencies = []\n")
+	client.filesByKey[fileKey("libs/pkg/pyproject.toml", "head-sha")] = []byte("[project]\ndependencies = [\"requests==2.32.3\"]\n")
 	return client
 }
 

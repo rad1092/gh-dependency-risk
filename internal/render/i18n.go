@@ -183,9 +183,11 @@ func localizeNote(note analysis.Note, lang string) string {
 
 	switch note.Code {
 	case analysis.NoteDependencyReviewFallback:
-		return "Dependency Review API를 사용할 수 없어 lockfile 기반 fallback 분석을 사용했습니다."
+		return "Dependency Review API를 사용할 수 없어 local fallback 분석을 사용했습니다."
 	case analysis.NoteNonRegistrySource:
 		return fmt.Sprintf("%s 패키지가 기본 레지스트리 외 소스로 해석됩니다: %s", note.Dependency, note.Detail)
+	case analysis.NoteUnsupportedDependency:
+		return fmt.Sprintf("일부 의존성 항목은 local fallback에서 분석되지 않았습니다: %s", note.Detail)
 	default:
 		return note.Code
 	}
