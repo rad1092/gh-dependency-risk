@@ -65,6 +65,31 @@ func TestRenderKoreanNotesDoNotExposeRawCodes(t *testing.T) {
 	}
 }
 
+func TestRenderNonRegistrySourceNoteIsReadable(t *testing.T) {
+	report := noteReport()
+	report.Analysis.Notes = append(report.Analysis.Notes, analysis.Note{
+		Code:       analysis.NoteNonRegistrySource,
+		Dependency: "git-lib",
+		Detail:     "git:https://github.com/example/git-lib.git#branch=main",
+	})
+
+	englishMarkdown, err := Render(report, "markdown", "en")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(englishMarkdown, "git-lib resolves from a non-default package source: git:https://github.com/example/git-lib.git#branch=main") {
+		t.Fatalf("expected readable English non-registry note, got %q", englishMarkdown)
+	}
+
+	koreanMarkdown, err := Render(report, "markdown", "ko")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(koreanMarkdown, analysis.NoteNonRegistrySource) || !strings.Contains(koreanMarkdown, "git-lib") {
+		t.Fatalf("expected localized Korean non-registry note without raw code, got %q", koreanMarkdown)
+	}
+}
+
 func noteReport() Report {
 	return Report{
 		Repo: "owner/repo",

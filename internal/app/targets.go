@@ -372,8 +372,16 @@ func discoverAPIOnlyTargets(ctx context.Context, cache *repoDataCache, baseRef, 
 				continue
 			}
 			ecosystem, manager = review.EcosystemPoetry, review.PackageManagerPoetry
+			localFallback = true
 		default:
 			continue
+		}
+		lockfilePath := ""
+		if manager == review.PackageManagerPoetry {
+			candidate := poetryLockfilePathForDir(manifestDir(cleaned))
+			if _, ok := poetryLockfiles[candidate]; ok {
+				lockfilePath = candidate
+			}
 		}
 		fallbackReason := ""
 		if !localFallback {
@@ -382,6 +390,7 @@ func discoverAPIOnlyTargets(ctx context.Context, cache *repoDataCache, baseRef, 
 		grouped[cleaned] = append(grouped[cleaned], analysis.AnalysisTarget{
 			DisplayName:     displayNameForManifest(cleaned),
 			ManifestPath:    cleaned,
+			LockfilePath:    lockfilePath,
 			Kind:            kindForManifest(cleaned),
 			PackageManager:  string(manager),
 			Ecosystem:       string(ecosystem),
@@ -417,7 +426,7 @@ func detectPoetryManifest(ctx context.Context, cache *repoDataCache, baseRef, he
 		if err != nil {
 			return false, err
 		}
-		if strings.Contains(string(data), "[tool.poetry") {
+		if pythondeps.HasPoetryProject(data) {
 			return true, nil
 		}
 	}
@@ -951,7 +960,7 @@ func manifestPaths(targets []discoveredTarget) []string {
 
 func fallbackUnavailableReason(ecosystem review.Ecosystem) string {
 	switch ecosystem {
-	case review.EcosystemCargo, review.EcosystemComposer, review.EcosystemGoModules, review.EcosystemMaven, review.EcosystemPoetry, review.EcosystemRubyGems, review.EcosystemSwiftPM:
+	case review.EcosystemCargo, review.EcosystemComposer, review.EcosystemGoModules, review.EcosystemMaven, review.EcosystemRubyGems, review.EcosystemSwiftPM:
 		return "dependency review is required for this ecosystem in this release"
 	default:
 		return ""

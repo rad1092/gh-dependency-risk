@@ -2,6 +2,7 @@ package app
 
 import (
 	"encoding/json"
+	"sort"
 	"strings"
 	"testing"
 
@@ -201,25 +202,198 @@ func TestRunPRPythonNestedTargetsAndPathFiltering(t *testing.T) {
 	_ = findChange(t, payload, "requests")
 }
 
-func TestRunPRPythonPoetryOnlyPyProjectIsNotDirectFallbackTarget(t *testing.T) {
-	client := newPythonBaseFakeGitHubClient()
-	client.files = []ghclient.PullRequestFile{{Filename: "pyproject.toml", Status: "modified"}}
-	client.repositoryFilesByRef["base-sha"] = []string{"pyproject.toml"}
-	client.repositoryFilesByRef["head-sha"] = []string{"pyproject.toml"}
-	poetryOnly := []byte("[tool.poetry]\nname = \"demo\"\nversion = \"0.1.0\"\n[tool.poetry.dependencies]\npython = \"^3.12\"\nrequests = \"^2.32\"\n")
-	client.filesByKey[fileKey("pyproject.toml", "base-sha")] = poetryOnly
-	client.filesByKey[fileKey("pyproject.toml", "head-sha")] = poetryOnly
+func TestRunPRPoetryOnlyPyProjectIsLocalFallbackTarget(t *testing.T) {
+	client := newPoetryFakeGitHubClient(
+		poetryPyProject(map[string]string{"requests": "^2.31"}, nil),
+		poetryPyProject(map[string]string{"requests": "^2.32"}, nil),
+		poetryLock(map[string]string{"requests": "2.31.0"}, nil),
+		poetryLock(map[string]string{"requests": "2.32.3"}, nil),
+	)
 
 	stdout, _, err := runPRWithClient(t, client, RunPROptions{ListTargets: true})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(stdout, "root [root, ecosystem=poetry, manager=poetry]") {
-		t.Fatalf("expected Poetry API-only target, got %q", stdout)
+		t.Fatalf("expected Poetry target, got %q", stdout)
 	}
-	if strings.Contains(stdout, "manager=pyproject") {
-		t.Fatalf("did not expect Poetry-only pyproject.toml to be promoted to Python direct fallback, got %q", stdout)
+	if !strings.Contains(stdout, "lockfile: poetry.lock") {
+		t.Fatalf("expected Poetry lockfile listing, got %q", stdout)
 	}
+	if strings.Contains(stdout, "fallback:") {
+		t.Fatalf("did not expect Poetry target to remain API-only, got %q", stdout)
+	}
+}
+
+func TestRunPRPoetryFallbackAddedUsesLockVersion(t *testing.T) {
+	client := newPoetryFakeGitHubClient(
+		poetryPyProject(nil, nil),
+		poetryPyProject(map[string]string{"requests": "^2.32"}, nil),
+		"",
+		poetryLock(map[string]string{"requests": "2.32.3"}, nil),
+	)
+
+	stdout, _, err := runPRWithClient(t, client, RunPROptions{Format: "json", Paths: []string{"pyproject.toml"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload := decodeJSONReport(t, stdout)
+	change := findChange(t, payload, "requests")
+	if change.ChangeType != analysis.ChangeAdded || change.ToRequirement != "^2.32" || change.ToVersion != "2.32.3" || change.Scope != analysis.ScopeRuntime {
+		t.Fatalf("unexpected Poetry added change: %#v", change)
+	}
+}
+
+func TestRunPRPoetryFallbackUpdatedUsesLockVersion(t *testing.T) {
+	client := newPoetryFakeGitHubClient(
+		poetryPyProject(map[string]string{"django": "^4.2"}, nil),
+		poetryPyProject(map[string]string{"django": "^5.0"}, nil),
+		poetryLock(map[string]string{"django": "4.2.11"}, nil),
+		poetryLock(map[string]string{"django": "5.0.1"}, nil),
+	)
+
+	stdout, _, err := runPRWithClient(t, client, RunPROptions{Format: "json"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	change := findChange(t, decodeJSONReport(t, stdout), "django")
+	if change.ChangeType != analysis.ChangeUpdated || change.FromVersion != "4.2.11" || change.ToVersion != "5.0.1" {
+		t.Fatalf("unexpected Poetry updated change: %#v", change)
+	}
+	if !containsString(change.RiskDrivers, analysis.DriverMajorVersionBump) {
+		t.Fatalf("expected major version driver, got %#v", change.RiskDrivers)
+	}
+}
+
+func TestRunPRPoetryFallbackRemovedUsesLockVersion(t *testing.T) {
+	client := newPoetryFakeGitHubClient(
+		poetryPyProject(map[string]string{"flask": "^3.0"}, nil),
+		poetryPyProject(nil, nil),
+		poetryLock(map[string]string{"flask": "3.0.3"}, nil),
+		"",
+	)
+
+	stdout, _, err := runPRWithClient(t, client, RunPROptions{Format: "json"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	change := findChange(t, decodeJSONReport(t, stdout), "flask")
+	if change.ChangeType != analysis.ChangeRemoved || change.FromVersion != "3.0.3" || change.ToVersion != "" {
+		t.Fatalf("unexpected Poetry removed change: %#v", change)
+	}
+}
+
+func TestRunPRPoetryFallbackNonRegistrySourceUsesPyProjectSourceFirst(t *testing.T) {
+	client := newPoetryFakeGitHubClient(
+		poetryPyProject(nil, nil),
+		poetryPyProject(nil, map[string]string{"git-lib": `{ git = "https://github.com/example/from-pyproject.git", branch = "main" }`}),
+		"",
+		poetryLockWithSource("git-lib", "0.1.0", "git", "https://github.com/example/from-lock.git", "main"),
+	)
+
+	stdout, _, err := runPRWithClient(t, client, RunPROptions{Format: "json"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload := decodeJSONReport(t, stdout)
+	change := findChange(t, payload, "git-lib")
+	if change.Resolved != "git:https://github.com/example/from-pyproject.git#branch=main" {
+		t.Fatalf("expected pyproject source to win, got %#v", change)
+	}
+	note := findNote(t, payload.Notes, analysis.NoteNonRegistrySource)
+	if note.Dependency != "git-lib" || note.Detail != change.Resolved {
+		t.Fatalf("expected non-registry note for pyproject source, got %#v", payload.Notes)
+	}
+}
+
+func TestRunPRPoetryUnsupportedOnlyKeepsExitCode2(t *testing.T) {
+	client := newPoetryFakeGitHubClient(
+		poetryPyProject(nil, nil),
+		"[tool.poetry]\nname = \"demo\"\nversion = \"0.1.0\"\n[tool.poetry.dependencies]\nbad = [\"not\", \"supported\"]\n",
+		"",
+		"",
+	)
+
+	_, stderr, err := runPRWithClient(t, client, RunPROptions{Format: "json"})
+	assertExitCode(t, err, 2)
+	if !strings.Contains(stderr, "unsupported dependency entries were present") {
+		t.Fatalf("expected unsupported warning on stderr, got %q", stderr)
+	}
+}
+
+func TestRunPRPoetrySupportedAndUnsupportedIncludesNote(t *testing.T) {
+	client := newPoetryFakeGitHubClient(
+		poetryPyProject(nil, nil),
+		"[tool.poetry]\nname = \"demo\"\nversion = \"0.1.0\"\n[tool.poetry.dependencies]\nrequests = \"^2.32\"\nbad = [\"not\", \"supported\"]\n",
+		"",
+		poetryLock(map[string]string{"requests": "2.32.3"}, nil),
+	)
+
+	stdout, _, err := runPRWithClient(t, client, RunPROptions{Format: "json"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload := decodeJSONReport(t, stdout)
+	_ = findChange(t, payload, "requests")
+	if !hasNote(payload.Notes, analysis.NoteUnsupportedDependency) {
+		t.Fatalf("expected unsupported note, got %#v", payload.Notes)
+	}
+}
+
+func TestRunPRPoetryUsesDependencyReviewWhenAvailable(t *testing.T) {
+	client := newPoetryFakeGitHubClient(
+		poetryPyProject(nil, nil),
+		poetryPyProject(map[string]string{"requests": "^2.32"}, nil),
+		"",
+		poetryLock(map[string]string{"requests": "2.32.3"}, nil),
+	)
+	client.compareErr = nil
+	client.compareChanges = []ghclient.DependencyReviewChange{
+		{Name: "requests", Manifest: "pyproject.toml", Ecosystem: "poetry", ChangeType: "added", Version: "2.32.3"},
+	}
+
+	stdout, _, err := runPRWithClient(t, client, RunPROptions{Format: "json"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload := decodeJSONReport(t, stdout)
+	if !payload.DependencyReviewAvailable {
+		t.Fatalf("expected dependency review primary path, got %#v", payload)
+	}
+	for _, key := range client.getFileKeys {
+		if strings.Contains(key, "poetry.lock@") {
+			t.Fatalf("expected dependency review path not to load poetry.lock, got file calls %#v", client.getFileKeys)
+		}
+	}
+	_ = findChange(t, payload, "requests")
+}
+
+func TestRunPRPoetryNestedTargetAndPathFiltering(t *testing.T) {
+	client := newNestedPoetryFakeGitHubClient()
+
+	stdout, _, err := runPRWithClient(t, client, RunPROptions{ListTargets: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, expected := range []string{
+		"services/worker [standalone, ecosystem=poetry, manager=poetry]",
+		"manifest: services/worker/pyproject.toml",
+		"lockfile: services/worker/poetry.lock",
+	} {
+		if !strings.Contains(stdout, expected) {
+			t.Fatalf("expected nested Poetry target listing to contain %q, got %q", expected, stdout)
+		}
+	}
+
+	stdout, _, err = runPRWithClient(t, client, RunPROptions{Format: "json", Paths: []string{"services/worker/pyproject.toml"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload := decodeJSONReport(t, stdout)
+	if len(payload.Targets) != 1 || payload.Targets[0].Target.ManifestPath != "services/worker/pyproject.toml" {
+		t.Fatalf("expected nested Poetry target only, got %#v", payload.Targets)
+	}
+	_ = findChange(t, payload, "celery")
 }
 
 func newPythonRequirementsFakeGitHubClient(base, head string) *fakeGitHubClient {
@@ -272,6 +446,100 @@ func newPythonNestedFakeGitHubClient() *fakeGitHubClient {
 	return client
 }
 
+func newPoetryFakeGitHubClient(basePyProject, headPyProject, baseLock, headLock string) *fakeGitHubClient {
+	client := newPythonBaseFakeGitHubClient()
+	client.files = []ghclient.PullRequestFile{{Filename: "pyproject.toml", Status: "modified"}}
+	client.repositoryFilesByRef["base-sha"] = []string{"pyproject.toml"}
+	client.repositoryFilesByRef["head-sha"] = []string{"pyproject.toml"}
+	client.filesByKey[fileKey("pyproject.toml", "base-sha")] = []byte(basePyProject)
+	client.filesByKey[fileKey("pyproject.toml", "head-sha")] = []byte(headPyProject)
+	if baseLock != "" || headLock != "" {
+		client.files = append(client.files, ghclient.PullRequestFile{Filename: "poetry.lock", Status: "modified"})
+		client.repositoryFilesByRef["base-sha"] = append(client.repositoryFilesByRef["base-sha"], "poetry.lock")
+		client.repositoryFilesByRef["head-sha"] = append(client.repositoryFilesByRef["head-sha"], "poetry.lock")
+		client.filesByKey[fileKey("poetry.lock", "base-sha")] = []byte(baseLock)
+		client.filesByKey[fileKey("poetry.lock", "head-sha")] = []byte(headLock)
+	}
+	return client
+}
+
+func newNestedPoetryFakeGitHubClient() *fakeGitHubClient {
+	client := newPythonBaseFakeGitHubClient()
+	client.files = []ghclient.PullRequestFile{
+		{Filename: "services/worker/pyproject.toml", Status: "modified"},
+		{Filename: "services/worker/poetry.lock", Status: "modified"},
+	}
+	client.repositoryFilesByRef["base-sha"] = []string{"services/worker/pyproject.toml", "services/worker/poetry.lock"}
+	client.repositoryFilesByRef["head-sha"] = []string{"services/worker/pyproject.toml", "services/worker/poetry.lock"}
+	client.filesByKey[fileKey("services/worker/pyproject.toml", "base-sha")] = []byte(poetryPyProject(nil, nil))
+	client.filesByKey[fileKey("services/worker/pyproject.toml", "head-sha")] = []byte(poetryPyProject(map[string]string{"celery": "^5.4"}, nil))
+	client.filesByKey[fileKey("services/worker/poetry.lock", "base-sha")] = []byte("")
+	client.filesByKey[fileKey("services/worker/poetry.lock", "head-sha")] = []byte(poetryLock(map[string]string{"celery": "5.4.0"}, nil))
+	return client
+}
+
+func poetryPyProject(dependencies map[string]string, tableDependencies map[string]string) string {
+	var b strings.Builder
+	b.WriteString("[tool.poetry]\nname = \"demo\"\nversion = \"0.1.0\"\n\n[tool.poetry.dependencies]\npython = \"^3.12\"\n")
+	names := sortedMapKeys(dependencies)
+	for _, name := range names {
+		b.WriteString(name)
+		b.WriteString(" = \"")
+		b.WriteString(dependencies[name])
+		b.WriteString("\"\n")
+	}
+	names = sortedMapKeys(tableDependencies)
+	for _, name := range names {
+		b.WriteString(name)
+		b.WriteString(" = ")
+		b.WriteString(tableDependencies[name])
+		b.WriteString("\n")
+	}
+	return b.String()
+}
+
+func poetryLock(packages map[string]string, sourcePackages map[string]string) string {
+	var b strings.Builder
+	for _, name := range sortedMapKeys(packages) {
+		b.WriteString("[[package]]\n")
+		b.WriteString("name = \"")
+		b.WriteString(name)
+		b.WriteString("\"\nversion = \"")
+		b.WriteString(packages[name])
+		b.WriteString("\"\ncategory = \"main\"\noptional = false\n\n")
+	}
+	for _, name := range sortedMapKeys(sourcePackages) {
+		b.WriteString(poetryLockWithSource(name, sourcePackages[name], "git", "https://github.com/example/"+name+".git", "main"))
+	}
+	return b.String()
+}
+
+func poetryLockWithSource(name, version, sourceType, sourceURL, reference string) string {
+	var b strings.Builder
+	b.WriteString("[[package]]\n")
+	b.WriteString("name = \"")
+	b.WriteString(name)
+	b.WriteString("\"\nversion = \"")
+	b.WriteString(version)
+	b.WriteString("\"\ngroups = [\"main\"]\noptional = false\n\n[package.source]\ntype = \"")
+	b.WriteString(sourceType)
+	b.WriteString("\"\nurl = \"")
+	b.WriteString(sourceURL)
+	b.WriteString("\"\nreference = \"")
+	b.WriteString(reference)
+	b.WriteString("\"\n\n")
+	return b.String()
+}
+
+func sortedMapKeys(values map[string]string) []string {
+	keys := make([]string, 0, len(values))
+	for key := range values {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
 func newPythonBaseFakeGitHubClient() *fakeGitHubClient {
 	client := newFakeGitHubClient()
 	client.pr = ghclient.PullRequest{
@@ -314,4 +582,15 @@ func hasNote(notes []analysis.Note, code string) bool {
 		}
 	}
 	return false
+}
+
+func findNote(t *testing.T, notes []analysis.Note, code string) analysis.Note {
+	t.Helper()
+	for _, note := range notes {
+		if note.Code == code {
+			return note
+		}
+	}
+	t.Fatalf("expected note %s, got %#v", code, notes)
+	return analysis.Note{}
 }

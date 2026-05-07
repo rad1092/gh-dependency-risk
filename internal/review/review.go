@@ -208,7 +208,7 @@ func SupportsDependencyReviewEcosystem(ecosystem Ecosystem) bool {
 
 func HasLocalFallback(packageManager PackageManager) bool {
 	switch packageManager {
-	case PackageManagerNPM, PackageManagerPip, PackageManagerPyProject, PackageManagerPNPM, PackageManagerYarn:
+	case PackageManagerNPM, PackageManagerPip, PackageManagerPyProject, PackageManagerPNPM, PackageManagerPoetry, PackageManagerYarn:
 		return true
 	default:
 		return false

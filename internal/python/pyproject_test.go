@@ -71,7 +71,7 @@ dev = ["pytest"]
 	if len(result.Unsupported) != 2 {
 		t.Fatalf("expected Poetry and dependency-groups unsupported notes, got %#v", result.Unsupported)
 	}
-	if !hasUnsupportedReason(result.Unsupported, "Poetry dependency tables are not supported by the Python direct local fallback in this phase") {
+	if !hasUnsupportedReason(result.Unsupported, "Poetry dependency tables are handled by Poetry local fallback targets, not the PEP 621 direct fallback") {
 		t.Fatalf("expected Poetry unsupported note, got %#v", result.Unsupported)
 	}
 	if !hasUnsupportedReason(result.Unsupported, "dependency groups are not supported by the Python direct local fallback in this phase") {

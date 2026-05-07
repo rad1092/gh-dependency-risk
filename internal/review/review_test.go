@@ -87,3 +87,12 @@ func TestNormalizeEcosystemSupportsCommonDependencyReviewAliases(t *testing.T) {
 		}
 	}
 }
+
+func TestHasLocalFallbackIncludesPoetry(t *testing.T) {
+	if !HasLocalFallback(PackageManagerPoetry) {
+		t.Fatalf("expected Poetry to have local fallback")
+	}
+	if HasLocalFallback(PackageManagerGo) {
+		t.Fatalf("did not expect Go modules to have local fallback")
+	}
+}

@@ -24,14 +24,16 @@ fallback. An asciinema-compatible recording is also checked in at
   - pnpm: `package.json`, `pnpm-lock.yaml`
   - pnpm workspace discovery: `pnpm-workspace.yaml`
   - yarn: `package.json`, `yarn.lock` (narrow Yarn Classic / node_modules fallback only)
-  - Python: `requirements.txt` and PEP 621 `pyproject.toml` direct
-    dependency declarations only; no resolver, lockfile, or transitive analysis
+  - Python: `requirements.txt`, PEP 621 `pyproject.toml`, and Poetry
+    `pyproject.toml` direct dependency declarations; Poetry may use
+    `poetry.lock` to enrich direct resolved versions, with no resolver or full
+    transitive analysis
 - one Go binary
 - dependency review API first, local fallback only when dependency review is
   unavailable
 - no server, webhook receiver, GitHub App, DB, queue, dashboard, bun, or
-  broad non-JS local fallback beyond the narrow Python direct-declaration
-  fallback in this release
+  broad non-JS local fallback beyond the narrow Python direct-declaration and
+  Poetry direct lockfile fallback in this release
 
 Dependency Review ecosystems surfaced in this release when GitHub provides
 them:
@@ -285,8 +287,8 @@ The score model stays heuristic, deterministic, and intentionally auditable.
 | pnpm | Dependency Review data is used when available. | Local fallback analyzes `package.json`, `pnpm-lock.yaml`, and `pnpm-workspace.yaml` discovery. |
 | Yarn Classic | Dependency Review data is used when available. | Local fallback analyzes `package.json` and classic `yarn.lock`. |
 | Yarn Berry / PnP | Dependency Review data may be surfaced when GitHub provides it. | Local fallback fails honestly when the lockfile cannot be analyzed faithfully. |
-| Python `requirements.txt` / PEP 621 `pyproject.toml` | Dependency Review data is used when available. | Local fallback compares direct dependency declarations only. No resolver, lockfile, or transitive analysis. |
-| Cargo, Composer, Go modules, Maven, Poetry, RubyGems, SwiftPM | Dependency Review data may be surfaced when GitHub provides it. | No local fallback in this release. |
+| Python `requirements.txt` / PEP 621 `pyproject.toml` / Poetry `pyproject.toml` + `poetry.lock` | Dependency Review data is used when available. | Local fallback compares direct dependency declarations and can use `poetry.lock` to enrich direct resolved versions. No resolver, broad lockfile support, or full transitive analysis. |
+| Cargo, Composer, Go modules, Maven, RubyGems, SwiftPM | Dependency Review data may be surfaced when GitHub provides it. | No local fallback in this release. |
 
 ## Behavior
 
@@ -311,6 +313,9 @@ Supported target shapes:
 - Python `requirements.txt` direct dependency declarations
 - PEP 621 `pyproject.toml` direct dependencies from `[project].dependencies`
   and `[project.optional-dependencies]`
+- Poetry `pyproject.toml` direct dependencies from `[tool.poetry.dependencies]`,
+  `[tool.poetry.dev-dependencies]`, and `[tool.poetry.group.<name>.dependencies]`,
+  with optional `poetry.lock` direct resolved-version enrichment
 
 ### Mixed ecosystems and JS workspaces
 
@@ -353,9 +358,13 @@ Notes:
 - if dependency review is unavailable and the selected target belongs to an
   ecosystem without local fallback support in this release, the command returns
   a clear actionable error instead of pretending to analyze it
-- Python local fallback is declaration-only: unsupported requirement includes,
-  constraints, editable installs, Poetry tables, dependency groups, `poetry.lock`,
-  and `uv.lock` are not resolved in this phase
+- Python local fallback is declaration-oriented: unsupported requirement
+  includes, constraints, editable installs, unsupported Poetry dependency
+  shapes, dependency groups outside the Poetry direct subset, and `uv.lock` are
+  not resolved in this phase
+- `poetry.lock` support is limited to enriching direct Poetry dependencies with
+  resolved versions and source metadata; it does not reconstruct a full
+  transitive dependency graph
 - out of scope for now: bun, `package.json5`, `package.yaml`, pnpm catalogs,
   pnpm branch lockfiles, broad non-JS local fallback, Go module local fallback,
   and full Yarn Plug'n'Play graph resolution

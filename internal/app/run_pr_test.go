@@ -774,6 +774,7 @@ type fakeGitHubClient struct {
 	filesByKey               map[string][]byte
 	getFileErr               map[string]error
 	getFileCalls             int
+	getFileKeys              []string
 	comments                 []ghclient.IssueComment
 	listCommentsErr          error
 	listCommentsCalls        int
@@ -1111,6 +1112,7 @@ func (f *fakeGitHubClient) ListRepositoryFiles(_ context.Context, _ ghclient.Rep
 
 func (f *fakeGitHubClient) GetRepositoryFile(_ context.Context, _ ghclient.Repo, path, ref string) ([]byte, error) {
 	f.getFileCalls++
+	f.getFileKeys = append(f.getFileKeys, fileKey(path, ref))
 	if err, ok := f.getFileErr[fileKey(path, ref)]; ok {
 		return nil, err
 	}

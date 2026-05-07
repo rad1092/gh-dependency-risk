@@ -112,7 +112,7 @@ func RunPR(ctx context.Context, deps RunPRDependencies, opts RunPROptions) error
 	for _, target := range resolvedTargets {
 		reviewChanges := append([]analysis.ReviewChange(nil), reviewSnapshot.TargetChanges[target.Key()]...)
 		if !reviewSnapshot.Available && !target.LocalFallback {
-			return &ExitError{Code: 1, Err: fmt.Errorf("dependency review is unavailable and %s cannot be analyzed with local fallback in this release. Pass a PR from a repository where GitHub dependency review is enabled, or narrow to an npm/pnpm/yarn/python direct target with a supported manifest", target.ManifestPath)}
+			return &ExitError{Code: 1, Err: fmt.Errorf("dependency review is unavailable and %s cannot be analyzed with local fallback in this release. Pass a PR from a repository where GitHub dependency review is enabled, or narrow to an npm/pnpm/yarn/python direct/poetry target with a supported manifest", target.ManifestPath)}
 		}
 		if shouldUsePythonLocalFallback(target, reviewSnapshot.Available) {
 			input, err := loadPythonLocalInput(ctx, cache, pr.BaseSHA, pr.HeadSHA, target)
@@ -348,6 +348,9 @@ func loadLocalTargetData(ctx context.Context, cache *repoDataCache, baseSHA, hea
 			return nil, nil, nil, nil, err
 		}
 	}
+	if path.Base(target.ManifestPath) != "package.json" {
+		return baseManifest, headManifest, nil, nil, nil
+	}
 	if !target.LocalFallback || strings.TrimSpace(target.LockfilePath) == "" {
 		return baseManifest, headManifest, nil, nil, nil
 	}
@@ -374,7 +377,7 @@ func shouldUsePythonLocalFallback(target analysis.AnalysisTarget, dependencyRevi
 		return false
 	}
 	switch target.PackageManager {
-	case "pip", "pyproject":
+	case "pip", "pyproject", "poetry":
 		return true
 	default:
 		return false
@@ -382,6 +385,9 @@ func shouldUsePythonLocalFallback(target analysis.AnalysisTarget, dependencyRevi
 }
 
 func loadPythonLocalInput(ctx context.Context, cache *repoDataCache, baseSHA, headSHA string, target analysis.AnalysisTarget) (analysis.LocalInput, error) {
+	if target.PackageManager == "poetry" {
+		return loadPoetryLocalInput(ctx, cache, baseSHA, headSHA, target)
+	}
 	baseData, err := cache.file(ctx, baseSHA, target.ManifestPath)
 	if err != nil {
 		return analysis.LocalInput{}, err
@@ -405,6 +411,56 @@ func loadPythonLocalInput(ctx context.Context, cache *repoDataCache, baseSHA, he
 		BaseDependencies:          convertPythonDependencies(baseResult.Dependencies),
 		HeadDependencies:          convertPythonDependencies(headResult.Dependencies),
 		Unsupported:               convertPythonUnsupported(target.ManifestPath, baseResult.Unsupported, headResult.Unsupported),
+	}, nil
+}
+
+func loadPoetryLocalInput(ctx context.Context, cache *repoDataCache, baseSHA, headSHA string, target analysis.AnalysisTarget) (analysis.LocalInput, error) {
+	baseData, err := cache.file(ctx, baseSHA, target.ManifestPath)
+	if err != nil {
+		return analysis.LocalInput{}, err
+	}
+	headData, err := cache.file(ctx, headSHA, target.ManifestPath)
+	if err != nil {
+		return analysis.LocalInput{}, err
+	}
+	baseResult, err := pythondeps.ParsePoetryPyProject(baseData)
+	if err != nil {
+		return analysis.LocalInput{}, err
+	}
+	headResult, err := pythondeps.ParsePoetryPyProject(headData)
+	if err != nil {
+		return analysis.LocalInput{}, err
+	}
+
+	unsupported := convertPythonUnsupported(target.ManifestPath, baseResult.Unsupported, headResult.Unsupported)
+	if strings.TrimSpace(target.LockfilePath) != "" {
+		baseLockData, err := cache.file(ctx, baseSHA, target.LockfilePath)
+		if err != nil {
+			return analysis.LocalInput{}, err
+		}
+		headLockData, err := cache.file(ctx, headSHA, target.LockfilePath)
+		if err != nil {
+			return analysis.LocalInput{}, err
+		}
+		baseLockfile, err := pythondeps.ParsePoetryLockfile(baseLockData)
+		if err != nil {
+			return analysis.LocalInput{}, err
+		}
+		headLockfile, err := pythondeps.ParsePoetryLockfile(headLockData)
+		if err != nil {
+			return analysis.LocalInput{}, err
+		}
+		baseResult = pythondeps.ApplyPoetryLockfile(baseResult, baseLockfile)
+		headResult = pythondeps.ApplyPoetryLockfile(headResult, headLockfile)
+		unsupported = append(unsupported, convertPythonUnsupported(target.LockfilePath, baseLockfile.Unsupported, headLockfile.Unsupported)...)
+	}
+
+	return analysis.LocalInput{
+		Target:                    target,
+		DependencyReviewAvailable: false,
+		BaseDependencies:          convertPythonDependencies(baseResult.Dependencies),
+		HeadDependencies:          convertPythonDependencies(headResult.Dependencies),
+		Unsupported:               unsupported,
 	}, nil
 }
 
@@ -435,8 +491,12 @@ func convertPythonDependencies(dependencies []pythondeps.Dependency) []analysis.
 
 func pythonScope(scope pythondeps.Scope) analysis.DependencyScope {
 	switch scope {
+	case pythondeps.ScopeDev:
+		return analysis.ScopeDev
 	case pythondeps.ScopeOptional:
 		return analysis.ScopeOptional
+	case pythondeps.ScopeUnknown:
+		return analysis.ScopeUnknown
 	default:
 		return analysis.ScopeRuntime
 	}

@@ -4,6 +4,8 @@ All notable changes to `gh-dep-risk` will be documented in this file.
 
 ## Unreleased
 
+- Added Poetry `pyproject.toml` local fallback with optional `poetry.lock`
+  direct resolved-version enrichment when Dependency Review is unavailable.
 - Added Python direct dependency local fallback for `requirements.txt` and PEP
   621 `pyproject.toml` declarations when Dependency Review is unavailable.
 - Updated public badge, smoke-test, and release documentation to distinguish
