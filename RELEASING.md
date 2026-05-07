@@ -55,13 +55,22 @@ gh workflow run .github/workflows/dep-risk-manual.yml -f pr=123
 gh run watch
 ```
 
+For remote comment-upsert smoke, dispatch the comment smoke repository's own
+workflow so it writes to its own fixture PR with its repository-scoped
+`GITHUB_TOKEN`:
+
+```bash
+gh workflow run comment-smoke.yml --repo rad1092/gh-dep-risk-smoke-comments -f pr=1 -f source_ref=main -f no_registry=true
+gh run watch --repo rad1092/gh-dep-risk-smoke-comments
+```
+
 Then verify:
 
 - the workflow summary contains the markdown report
 - the uploaded artifact contains the bundle files
-- comment mode behaves correctly if you tested `comment=true`
-- for private cross-repo targets, verify the workflow token can read the target
-  PR repository before relying on comment mode or artifact generation
+- comment mode behaves correctly in the comment smoke repository if you ran it
+- for private cross-repo read-only targets, verify the workflow token can read
+  the target PR repository before relying on artifact generation
 
 If GitHub auth or repository context is unavailable, skip this step and perform
 it later from the default branch after pushing.

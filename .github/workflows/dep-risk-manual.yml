@@ -78,7 +78,7 @@ jobs:
         id: dep_risk
         shell: bash
         env:
-          GH_TOKEN: ${{ inputs.comment && secrets.DEP_RISK_GH_TOKEN || secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           INPUT_PR: ${{ inputs.pr }}
           INPUT_REPO: ${{ inputs.repo }}
           INPUT_LANG: ${{ inputs.lang }}
@@ -97,6 +97,13 @@ jobs:
 
           bundle_dir="$RUNNER_TEMP/dep-risk-bundle"
           rm -rf "$bundle_dir"
+          echo "bundle_dir=$bundle_dir" >> "$GITHUB_OUTPUT"
+
+          if [[ "$INPUT_COMMENT" == 'true' && "$GH_REPO" != "$DEFAULT_REPO" ]]; then
+            echo "::error::comment mode is limited to PRs in $DEFAULT_REPO when using this workflow. Run the target repository's own comment-smoke workflow for remote comment-upsert verification."
+            echo "exit_code=4" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
 
           args=(
             pr
@@ -117,7 +124,6 @@ jobs:
           ./gh-dep-risk "${args[@]}"
           exit_code=$?
 
-          echo "bundle_dir=$bundle_dir" >> "$GITHUB_OUTPUT"
           echo "exit_code=$exit_code" >> "$GITHUB_OUTPUT"
           exit 0
 

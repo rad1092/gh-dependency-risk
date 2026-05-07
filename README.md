@@ -463,6 +463,10 @@ Use the `dep-risk-manual` workflow and provide:
 - `comment`
 - `no_registry`
 
+`comment=true` is limited to PRs in this repository. For remote comment-upsert
+smoke, run the target smoke repository's own workflow instead so its
+repository-scoped `GITHUB_TOKEN` writes to its own PR.
+
 The workflow file must exist on the default branch for the **Run workflow**
 button to appear.
 
@@ -470,10 +474,12 @@ button to appear.
 
 ```bash
 gh workflow run .github/workflows/dep-risk-manual.yml -f pr=123
-gh workflow run .github/workflows/dep-risk-manual.yml -f pr=https://github.com/OWNER/REPO/pull/123 -f comment=true
+gh workflow run .github/workflows/dep-risk-manual.yml -f pr=https://github.com/OWNER/REPO/pull/123
 gh workflow run .github/workflows/dep-risk-manual.yml -f pr=3 -f repo=rad1092/gh-dep-risk-smoke-matrix -f no_registry=true
-gh workflow run .github/workflows/dep-risk-manual.yml -f pr=1 -f repo=rad1092/gh-dep-risk-smoke-comments -f comment=true -f no_registry=true
 gh run watch
+
+gh workflow run comment-smoke.yml --repo rad1092/gh-dep-risk-smoke-comments -f pr=1 -f source_ref=main -f no_registry=true
+gh run watch --repo rad1092/gh-dep-risk-smoke-comments
 ```
 
 ### Workflow results
@@ -487,16 +493,17 @@ Each manual run:
 - appends aggregate markdown output to the workflow job summary
 
 If `comment=true`, comment ownership follows the workflow-authenticated identity.
-The workflow uses the optional `DEP_RISK_GH_TOKEN` repository secret first, then
-falls back to `GITHUB_TOKEN`.
+This workflow uses only its repository-scoped `GITHUB_TOKEN`.
 
 When the workflow is running in a different repository than the target PR,
 `GITHUB_TOKEN` may not be allowed to read the target PR at all, especially for
-private cross-repo targets. In that case the workflow can fail before comment
-upsert. Cross-repo comment mode can also fail when the workflow token lacks
-issue-comment permissions on the target repository.
-For remote cross-repo comment smoke, set `DEP_RISK_GH_TOKEN` to a fine-grained
-token that can read the target PR repository and write issue comments there.
+private cross-repo targets. In that case the workflow can fail before artifact
+upload. Cross-repo comment mode is intentionally refused by this workflow.
+
+Remote comment smoke is handled by
+`rad1092/gh-dep-risk-smoke-comments/.github/workflows/comment-smoke.yml`. That
+workflow checks out this repository, builds the requested ref, and comments on
+its own fixture PR with its own `GITHUB_TOKEN`, so no PAT secret is needed.
 
 ### Self-hosted runners
 

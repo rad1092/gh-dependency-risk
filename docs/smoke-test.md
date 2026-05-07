@@ -28,7 +28,7 @@ Verify:
 ### Owned live matrix
 
 Use the owned E2E repository for repeatable smoke checks that are allowed to
-write comments:
+exercise read-only analysis and comment upsert:
 
 ```bash
 go build -o gh-dep-risk .
@@ -59,8 +59,10 @@ For owned live smoke runs:
 gh workflow run .github/workflows/dep-risk-manual.yml -f pr=3 -f repo=rad1092/gh-dep-risk-smoke-matrix -f no_registry=true
 gh workflow run .github/workflows/dep-risk-manual.yml -f pr=1 -f repo=rad1092/gh-dep-risk-smoke-matrix -f no_registry=true
 gh workflow run .github/workflows/dep-risk-manual.yml -f pr=2 -f repo=rad1092/gh-dep-risk-smoke-matrix -f no_registry=true
-gh workflow run .github/workflows/dep-risk-manual.yml -f pr=1 -f repo=rad1092/gh-dep-risk-smoke-comments -f comment=true -f no_registry=true
 gh run watch
+
+gh workflow run comment-smoke.yml --repo rad1092/gh-dep-risk-smoke-comments -f pr=1 -f source_ref=main -f no_registry=true
+gh run watch --repo rad1092/gh-dep-risk-smoke-comments
 ```
 
 Verify:
@@ -70,12 +72,11 @@ Verify:
   `metadata.json`
 - if multiple targets changed, the artifact also includes `targets/...`
 - for private cross-repo targets, verify the workflow token can read the target
-  PR repository; otherwise the run can fail before comment upsert or artifact
-  upload
-- remote cross-repo comment smoke needs the `DEP_RISK_GH_TOKEN` repository
-  secret with read access to the target PR repository and issue-comment write
-  permission there; otherwise the workflow falls back to `GITHUB_TOKEN`, which
-  cannot write comments to unrelated cross-repo targets
+  PR repository; otherwise the run can fail before artifact upload
+- remote comment smoke runs inside `rad1092/gh-dep-risk-smoke-comments` so its
+  repository-scoped `GITHUB_TOKEN` can write its own PR timeline comment
+- the main repository manual workflow intentionally refuses cross-repo comment
+  mode; it is for read-only cross-repo analysis and same-repository comments
 
 ## 3. Remote install smoke
 

@@ -9,12 +9,12 @@ All notable changes to `gh-dep-risk` will be documented in this file.
   `rad1092/gh-dep-risk` install path that keeps the command as `gh dep-risk`.
 - Documented the owned live smoke matrix for npm, pnpm workspace, Yarn
   standalone, local comment-upsert verification against
-  `rad1092/gh-dep-risk-smoke-comments`, and the remote workflow comment
-  permission boundary for cross-repo targets.
+  `rad1092/gh-dep-risk-smoke-comments`, and remote comment-upsert verification
+  from the comment smoke repository's own workflow.
 - Added repository hygiene coverage so workflow install commands keep the stable
   `gh dep-risk` command and badges keep the current repository slug.
-- Taught the manual workflow to use an optional `DEP_RISK_GH_TOKEN` secret for
-  cross-repo comment smoke while keeping `GITHUB_TOKEN` as the default fallback.
+- Kept the manual workflow on repository-scoped `GITHUB_TOKEN` and made it
+  refuse cross-repo comment mode instead of requiring a PAT secret.
 - Replaced the older live-smoke target with dedicated matrix and comment smoke
   repositories: `gh-dep-risk-smoke-matrix` and `gh-dep-risk-smoke-comments`.
 
