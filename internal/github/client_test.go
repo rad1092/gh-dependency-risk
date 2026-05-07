@@ -190,6 +190,33 @@ func TestClassifyAuthErrorWrapsHTTP401AsAuthError(t *testing.T) {
 	}
 }
 
+func TestActionsIntegrationViewerLoginFallsBackToActionsBot(t *testing.T) {
+	t.Setenv("GITHUB_ACTIONS", "true")
+
+	login, ok := actionsIntegrationViewerLogin(&api.HTTPError{
+		StatusCode: 403,
+		Message:    "Resource not accessible by integration",
+	})
+	if !ok {
+		t.Fatal("expected Actions integration fallback")
+	}
+	if login != "github-actions[bot]" {
+		t.Fatalf("unexpected login: got %q", login)
+	}
+}
+
+func TestActionsIntegrationViewerLoginRequiresActionsEnvironment(t *testing.T) {
+	t.Setenv("GITHUB_ACTIONS", "")
+
+	_, ok := actionsIntegrationViewerLogin(&api.HTTPError{
+		StatusCode: 403,
+		Message:    "Resource not accessible by integration",
+	})
+	if ok {
+		t.Fatal("expected no fallback outside GitHub Actions")
+	}
+}
+
 func TestDecodeRepositoryContentSupportsLargeBlobFallback(t *testing.T) {
 	want := []byte("hello from blob fallback")
 	content, err := decodeRepositoryContent("yarn.lock", "", "none", "blob-sha", func(sha string) (string, string, error) {

@@ -493,7 +493,8 @@ Each manual run:
 - appends aggregate markdown output to the workflow job summary
 
 If `comment=true`, comment ownership follows the workflow-authenticated identity.
-This workflow uses only its repository-scoped `GITHUB_TOKEN`.
+This workflow uses only its repository-scoped `GITHUB_TOKEN`; in GitHub Actions
+that identity is `github-actions[bot]`.
 
 When the workflow is running in a different repository than the target PR,
 `GITHUB_TOKEN` may not be allowed to read the target PR at all, especially for

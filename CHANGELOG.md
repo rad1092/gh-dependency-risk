@@ -15,6 +15,8 @@ All notable changes to `gh-dep-risk` will be documented in this file.
   `gh dep-risk` command and badges keep the current repository slug.
 - Kept the manual workflow on repository-scoped `GITHUB_TOKEN` and made it
   refuse cross-repo comment mode instead of requiring a PAT secret.
+- Allowed comment mode to recognize the GitHub Actions integration identity as
+  `github-actions[bot]` when `GITHUB_TOKEN` cannot call the `/user` endpoint.
 - Replaced the older live-smoke target with dedicated matrix and comment smoke
   repositories: `gh-dep-risk-smoke-matrix` and `gh-dep-risk-smoke-comments`.
 

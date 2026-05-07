@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"net/url"
+	"os"
 	"os/exec"
 	"path"
 	"sort"
@@ -143,12 +144,32 @@ func (c *APIClient) ViewerLogin(ctx context.Context, repo Repo) (string, error) 
 		Login string `json:"login"`
 	}
 	if err := client.DoWithContext(ctx, "GET", "user", nil, &resp); err != nil {
+		if login, ok := actionsIntegrationViewerLogin(err); ok {
+			return login, nil
+		}
 		return "", classifyAuthError(err)
 	}
 	if resp.Login == "" {
 		return "", AuthError{Op: "resolve authenticated viewer"}
 	}
 	return resp.Login, nil
+}
+
+func actionsIntegrationViewerLogin(err error) (string, bool) {
+	var httpErr *api.HTTPError
+	if !errors.As(err, &httpErr) {
+		return "", false
+	}
+	if httpErr.StatusCode != 403 {
+		return "", false
+	}
+	if !strings.Contains(strings.ToLower(httpErr.Message), "resource not accessible by integration") {
+		return "", false
+	}
+	if os.Getenv("GITHUB_ACTIONS") != "true" {
+		return "", false
+	}
+	return "github-actions[bot]", true
 }
 
 func (c *APIClient) ResolveCurrentPR(ctx context.Context, repo Repo) (int, error) {
