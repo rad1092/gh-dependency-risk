@@ -19,6 +19,8 @@ All notable changes to `gh-dep-risk` will be documented in this file.
   `github-actions[bot]` when `GITHUB_TOKEN` cannot call the `/user` endpoint.
 - Replaced the older live-smoke target with dedicated matrix and comment smoke
   repositories: `gh-dep-risk-smoke-matrix` and `gh-dep-risk-smoke-comments`.
+- Aligned the public smoke fixture README/About surfaces and marked the older
+  `dep-risk-live-e2e` repository as superseded by the dedicated smoke repos.
 
 ## v0.1.8
 

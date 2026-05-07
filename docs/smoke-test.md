@@ -27,8 +27,8 @@ Verify:
 
 ### Owned live matrix
 
-Use the owned E2E repository for repeatable smoke checks that are allowed to
-exercise read-only analysis and comment upsert:
+Use the owned matrix repository for repeatable read-only analysis checks, and
+use the comments repository only when intentionally exercising comment upsert:
 
 ```bash
 go build -o gh-dep-risk .
@@ -43,8 +43,9 @@ Verify:
 - npm, pnpm workspace, and Yarn standalone reports all render
 - JSON output includes `score`, `level`, and `dependency_review_available`
 - comment mode is used only on `rad1092/gh-dep-risk-smoke-comments`
-- PR `#1` has exactly one `<!-- gh-dep-risk -->` marker comment owned by the
-  authenticated user
+- PR `#1` has exactly one `<!-- gh-dep-risk -->` marker comment for the current
+  authenticated user; marker comments owned by other users or bots are left
+  untouched
 
 ## 2. Workflow dispatch run
 

@@ -125,7 +125,7 @@ gh dep-risk version
 gh dep-risk version --json
 ```
 
-Typical live checks:
+Typical live checks against owned fixture repositories:
 
 ```bash
 gh dep-risk pr 3 --repo rad1092/gh-dep-risk-smoke-matrix --lang en --format json --no-registry
@@ -134,8 +134,10 @@ gh dep-risk pr 2 --repo rad1092/gh-dep-risk-smoke-matrix --lang en --format json
 gh dep-risk pr 1 --repo rad1092/gh-dep-risk-smoke-comments --lang en --comment --no-registry
 ```
 
-Use comment mode only on repositories where you are comfortable writing a PR
-timeline comment. The live examples above target owned smoke repositories.
+The matrix repository covers read-only npm, pnpm, and Yarn analysis. The
+comments repository is the only live example that intentionally writes a PR
+timeline comment; it may contain one marker comment per authenticated identity
+such as `rad1092` locally and `github-actions[bot]` from Actions.
 
 Command shape:
 
