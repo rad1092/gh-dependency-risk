@@ -4,6 +4,14 @@ All notable changes to `gh-dep-risk` will be documented in this file.
 
 ## Unreleased
 
+- Updated public install, badge, smoke-test, and release documentation to use
+  the current `rad1092/gh-dependency-risk` repository slug while keeping the
+  installed command as `gh dep-risk`.
+- Documented the owned live smoke matrix for npm, pnpm workspace, Yarn
+  standalone, and comment-upsert verification against `rad1092/dep-risk-live-e2e`.
+- Added repository hygiene coverage so old remote install paths do not drift
+  back into public docs or release workflows.
+
 ## v0.1.8
 
 - Fixed local fallback against large repository lockfiles fetched from the

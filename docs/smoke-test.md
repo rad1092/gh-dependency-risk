@@ -25,10 +25,41 @@ Verify:
 - if the target repository has a very large lockfile, verify the run does not
   fail on a GitHub contents API `encoding: none` response
 
+### Owned live matrix
+
+Use the owned E2E repository for repeatable smoke checks that are allowed to
+write comments:
+
+```bash
+go build -o gh-dep-risk .
+./gh-dep-risk pr 1 --repo rad1092/dep-risk-live-e2e --lang en --format json --no-registry
+./gh-dep-risk pr 2 --repo rad1092/dep-risk-live-e2e --lang en --format json --no-registry
+./gh-dep-risk pr 4 --repo rad1092/dep-risk-live-e2e --lang en --format json --no-registry
+./gh-dep-risk pr 1 --repo rad1092/dep-risk-live-e2e --lang en --comment --no-registry
+```
+
+Verify:
+
+- npm, pnpm workspace, and Yarn standalone reports all render
+- JSON output includes `score`, `level`, and `dependency_review_available`
+- comment mode is used only on `rad1092/dep-risk-live-e2e`
+- PR `#1` has exactly one `<!-- gh-dep-risk -->` marker comment owned by the
+  authenticated user
+
 ## 2. Workflow dispatch run
 
 ```bash
 gh workflow run .github/workflows/dep-risk-manual.yml -f pr=123
+gh run watch
+```
+
+For owned live smoke runs:
+
+```bash
+gh workflow run .github/workflows/dep-risk-manual.yml -f pr=1 -f repo=rad1092/dep-risk-live-e2e -f no_registry=true
+gh workflow run .github/workflows/dep-risk-manual.yml -f pr=2 -f repo=rad1092/dep-risk-live-e2e -f no_registry=true
+gh workflow run .github/workflows/dep-risk-manual.yml -f pr=4 -f repo=rad1092/dep-risk-live-e2e -f no_registry=true
+gh workflow run .github/workflows/dep-risk-manual.yml -f pr=1 -f repo=rad1092/dep-risk-live-e2e -f comment=true -f no_registry=true
 gh run watch
 ```
 
@@ -45,7 +76,7 @@ Verify:
 ## 3. Remote install smoke
 
 ```bash
-gh extension install rad1092/gh-dep-risk --force
+gh extension install rad1092/gh-dependency-risk --force
 gh dep-risk version
 gh dep-risk version --json
 ```

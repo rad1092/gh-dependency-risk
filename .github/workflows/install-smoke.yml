@@ -25,7 +25,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p "$GH_CONFIG_DIR"
-          gh extension install rad1092/gh-dep-risk --force
+          gh extension install rad1092/gh-dependency-risk --force
           gh dep-risk version
           gh dep-risk version --json
           gh dep-risk pr 1 --repo rad1092/ascii-diagram-editor --lang en --format json --no-registry > dep-risk.json

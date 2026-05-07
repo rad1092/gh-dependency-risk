@@ -1,7 +1,7 @@
 # gh-dep-risk
 
-[![test](https://github.com/rad1092/gh-dep-risk/actions/workflows/test.yml/badge.svg)](https://github.com/rad1092/gh-dep-risk/actions/workflows/test.yml)
-[![install-smoke](https://github.com/rad1092/gh-dep-risk/actions/workflows/install-smoke.yml/badge.svg)](https://github.com/rad1092/gh-dep-risk/actions/workflows/install-smoke.yml)
+[![test](https://github.com/rad1092/gh-dependency-risk/actions/workflows/test.yml/badge.svg)](https://github.com/rad1092/gh-dependency-risk/actions/workflows/test.yml)
+[![install-smoke](https://github.com/rad1092/gh-dependency-risk/actions/workflows/install-smoke.yml/badge.svg)](https://github.com/rad1092/gh-dependency-risk/actions/workflows/install-smoke.yml)
 
 `gh-dep-risk` is a precompiled GitHub CLI extension that reviewers run on
 demand to summarize dependency risk in pull requests.
@@ -66,7 +66,7 @@ GitHub Enterprise.
 ### Install from GitHub
 
 ```bash
-gh extension install rad1092/gh-dep-risk
+gh extension install rad1092/gh-dependency-risk
 ```
 
 Upgrade later with:
@@ -99,6 +99,9 @@ The installed command remains `gh dep-risk`.
 The repository itself also needs the `gh-` prefix because GitHub CLI extension
 install requires remote extension repositories to start with `gh-`.
 
+The public repository slug is `gh-dependency-risk` for readability. The
+installed command intentionally stays shorter: `gh dep-risk`.
+
 The checkout directory name must still start with `gh-` for local extension
 install to work, so use a local folder such as `gh-dep-risk` when you clone
 for extension testing.
@@ -119,6 +122,18 @@ gh dep-risk pr --fail-level high
 gh dep-risk version
 gh dep-risk version --json
 ```
+
+Typical live checks:
+
+```bash
+gh dep-risk pr 1 --repo rad1092/dep-risk-live-e2e --lang en --format json --no-registry
+gh dep-risk pr 2 --repo rad1092/dep-risk-live-e2e --lang en --format json --no-registry
+gh dep-risk pr 4 --repo rad1092/dep-risk-live-e2e --lang en --format json --no-registry
+gh dep-risk pr 1 --repo rad1092/dep-risk-live-e2e --lang en --comment --no-registry
+```
+
+Use comment mode only on repositories where you are comfortable writing a PR
+timeline comment. The live examples above target an owned test repository.
 
 Command shape:
 
@@ -454,6 +469,8 @@ button to appear.
 ```bash
 gh workflow run .github/workflows/dep-risk-manual.yml -f pr=123
 gh workflow run .github/workflows/dep-risk-manual.yml -f pr=https://github.com/OWNER/REPO/pull/123 -f comment=true
+gh workflow run .github/workflows/dep-risk-manual.yml -f pr=1 -f repo=rad1092/dep-risk-live-e2e -f no_registry=true
+gh workflow run .github/workflows/dep-risk-manual.yml -f pr=1 -f repo=rad1092/dep-risk-live-e2e -f comment=true -f no_registry=true
 gh run watch
 ```
 
