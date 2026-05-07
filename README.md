@@ -128,14 +128,14 @@ gh dep-risk version --json
 Typical live checks:
 
 ```bash
-gh dep-risk pr 1 --repo rad1092/dep-risk-live-e2e --lang en --format json --no-registry
-gh dep-risk pr 2 --repo rad1092/dep-risk-live-e2e --lang en --format json --no-registry
-gh dep-risk pr 4 --repo rad1092/dep-risk-live-e2e --lang en --format json --no-registry
-gh dep-risk pr 1 --repo rad1092/dep-risk-live-e2e --lang en --comment --no-registry
+gh dep-risk pr 3 --repo rad1092/gh-dep-risk-smoke-matrix --lang en --format json --no-registry
+gh dep-risk pr 1 --repo rad1092/gh-dep-risk-smoke-matrix --lang en --format json --no-registry
+gh dep-risk pr 2 --repo rad1092/gh-dep-risk-smoke-matrix --lang en --format json --no-registry
+gh dep-risk pr 1 --repo rad1092/gh-dep-risk-smoke-comments --lang en --comment --no-registry
 ```
 
 Use comment mode only on repositories where you are comfortable writing a PR
-timeline comment. The live examples above target an owned test repository.
+timeline comment. The live examples above target owned smoke repositories.
 
 Command shape:
 
@@ -471,8 +471,8 @@ button to appear.
 ```bash
 gh workflow run .github/workflows/dep-risk-manual.yml -f pr=123
 gh workflow run .github/workflows/dep-risk-manual.yml -f pr=https://github.com/OWNER/REPO/pull/123 -f comment=true
-gh workflow run .github/workflows/dep-risk-manual.yml -f pr=1 -f repo=rad1092/dep-risk-live-e2e -f no_registry=true
-gh workflow run .github/workflows/dep-risk-manual.yml -f pr=1 -f repo=rad1092/dep-risk-live-e2e -f comment=true -f no_registry=true
+gh workflow run .github/workflows/dep-risk-manual.yml -f pr=3 -f repo=rad1092/gh-dep-risk-smoke-matrix -f no_registry=true
+gh workflow run .github/workflows/dep-risk-manual.yml -f pr=1 -f repo=rad1092/gh-dep-risk-smoke-comments -f comment=true -f no_registry=true
 gh run watch
 ```
 

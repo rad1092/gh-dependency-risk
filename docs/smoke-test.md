@@ -32,17 +32,17 @@ write comments:
 
 ```bash
 go build -o gh-dep-risk .
-./gh-dep-risk pr 1 --repo rad1092/dep-risk-live-e2e --lang en --format json --no-registry
-./gh-dep-risk pr 2 --repo rad1092/dep-risk-live-e2e --lang en --format json --no-registry
-./gh-dep-risk pr 4 --repo rad1092/dep-risk-live-e2e --lang en --format json --no-registry
-./gh-dep-risk pr 1 --repo rad1092/dep-risk-live-e2e --lang en --comment --no-registry
+./gh-dep-risk pr 3 --repo rad1092/gh-dep-risk-smoke-matrix --lang en --format json --no-registry
+./gh-dep-risk pr 1 --repo rad1092/gh-dep-risk-smoke-matrix --lang en --format json --no-registry
+./gh-dep-risk pr 2 --repo rad1092/gh-dep-risk-smoke-matrix --lang en --format json --no-registry
+./gh-dep-risk pr 1 --repo rad1092/gh-dep-risk-smoke-comments --lang en --comment --no-registry
 ```
 
 Verify:
 
 - npm, pnpm workspace, and Yarn standalone reports all render
 - JSON output includes `score`, `level`, and `dependency_review_available`
-- comment mode is used only on `rad1092/dep-risk-live-e2e`
+- comment mode is used only on `rad1092/gh-dep-risk-smoke-comments`
 - PR `#1` has exactly one `<!-- gh-dep-risk -->` marker comment owned by the
   authenticated user
 
@@ -56,10 +56,10 @@ gh run watch
 For owned live smoke runs:
 
 ```bash
-gh workflow run .github/workflows/dep-risk-manual.yml -f pr=1 -f repo=rad1092/dep-risk-live-e2e -f no_registry=true
-gh workflow run .github/workflows/dep-risk-manual.yml -f pr=2 -f repo=rad1092/dep-risk-live-e2e -f no_registry=true
-gh workflow run .github/workflows/dep-risk-manual.yml -f pr=4 -f repo=rad1092/dep-risk-live-e2e -f no_registry=true
-gh workflow run .github/workflows/dep-risk-manual.yml -f pr=1 -f repo=rad1092/dep-risk-live-e2e -f comment=true -f no_registry=true
+gh workflow run .github/workflows/dep-risk-manual.yml -f pr=3 -f repo=rad1092/gh-dep-risk-smoke-matrix -f no_registry=true
+gh workflow run .github/workflows/dep-risk-manual.yml -f pr=1 -f repo=rad1092/gh-dep-risk-smoke-matrix -f no_registry=true
+gh workflow run .github/workflows/dep-risk-manual.yml -f pr=2 -f repo=rad1092/gh-dep-risk-smoke-matrix -f no_registry=true
+gh workflow run .github/workflows/dep-risk-manual.yml -f pr=1 -f repo=rad1092/gh-dep-risk-smoke-comments -f comment=true -f no_registry=true
 gh run watch
 ```
 

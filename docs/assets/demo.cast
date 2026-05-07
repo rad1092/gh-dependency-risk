@@ -1,7 +1,7 @@
 {"version":2,"width":100,"height":30,"timestamp":1777429200,"env":{"SHELL":"pwsh","TERM":"xterm-256color"}}
-[0.1,"o","$ gh dep-risk pr 4 --repo rad1092/dep-risk-live-e2e --path yarn-app --lang en --no-registry\r\n"]
-[1.0,"o","Repository: rad1092/dep-risk-live-e2e\r\n"]
-[1.2,"o","PR: #4 Add standalone Yarn app\r\n"]
+[0.1,"o","$ gh dep-risk pr 2 --repo rad1092/gh-dep-risk-smoke-matrix --path yarn-app --lang en --no-registry\r\n"]
+[1.0,"o","Repository: rad1092/gh-dep-risk-smoke-matrix\r\n"]
+[1.2,"o","PR: #2 Add standalone Yarn app\r\n"]
 [1.4,"o","Score: 13 (low)\r\n"]
 [1.6,"o","Blast radius: medium\r\n"]
 [1.8,"o","Dependency review available: false\r\n"]
