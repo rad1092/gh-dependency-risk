@@ -90,12 +90,15 @@ After the `release` workflow finishes:
 Use a clean shell or another machine if possible:
 
 ```bash
-gh extension install rad1092/gh-dependency-risk
+gh extension install rad1092/gh-dep-risk
 gh dep-risk version
 gh dep-risk version --json
 ```
 
 Verify the version matches the new release tag and does not report only `dev`.
+The install path intentionally uses `rad1092/gh-dep-risk` so GitHub CLI keeps
+the command name `gh dep-risk`; the repository page redirects to the current
+`gh-dependency-risk` slug.
 
 If you want to avoid touching your everyday GitHub CLI state, set a temporary
 `GH_CONFIG_DIR` before running the install smoke.

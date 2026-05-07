@@ -7,28 +7,21 @@ import (
 	"testing"
 )
 
-func TestPublicDocsUseCurrentRepositorySlug(t *testing.T) {
-	oldRemoteSlug := "rad1092/" + "gh-dep-risk"
+func TestPublicDocsUseCurrentRepositorySlugForBadges(t *testing.T) {
 	currentRemoteSlug := "rad1092/gh-dependency-risk"
 
-	files := []string{
-		"README.md",
-		"RELEASING.md",
-		filepath.Join("docs", "smoke-test.md"),
-		filepath.Join(".github", "workflows", "install-smoke.yml"),
+	data, err := os.ReadFile("README.md")
+	if err != nil {
+		t.Fatal(err)
 	}
+	content := string(data)
 
-	for _, file := range files {
-		data, err := os.ReadFile(file)
-		if err != nil {
-			t.Fatalf("read %s: %v", file, err)
-		}
-		content := string(data)
-		if strings.Contains(content, oldRemoteSlug) {
-			t.Fatalf("%s still references the old remote repository slug", file)
-		}
-		if !strings.Contains(content, currentRemoteSlug) {
-			t.Fatalf("%s should reference the current remote repository slug", file)
+	for _, want := range []string{
+		"https://github.com/" + currentRemoteSlug + "/actions/workflows/test.yml",
+		"https://github.com/" + currentRemoteSlug + "/actions/workflows/install-smoke.yml",
+	} {
+		if !strings.Contains(content, want) {
+			t.Fatalf("README.md should reference the current remote repository slug in badge %q", want)
 		}
 	}
 }
@@ -41,7 +34,7 @@ func TestInstallSmokeKeepsStableCommandName(t *testing.T) {
 	content := string(data)
 
 	for _, want := range []string{
-		"gh extension install rad1092/gh-dependency-risk --force",
+		"gh extension install rad1092/gh-dep-risk --force",
 		"gh dep-risk version",
 		"gh dep-risk pr 1 --repo rad1092/ascii-diagram-editor",
 	} {
