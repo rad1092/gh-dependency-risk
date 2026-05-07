@@ -13,6 +13,8 @@ All notable changes to `gh-dep-risk` will be documented in this file.
   boundary for cross-repo targets.
 - Added repository hygiene coverage so workflow install commands keep the stable
   `gh dep-risk` command and badges keep the current repository slug.
+- Taught the manual workflow to use an optional `DEP_RISK_GH_TOKEN` secret for
+  cross-repo comment smoke while keeping `GITHUB_TOKEN` as the default fallback.
 
 ## v0.1.8
 

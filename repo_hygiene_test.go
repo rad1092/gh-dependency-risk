@@ -47,3 +47,16 @@ func TestInstallSmokeKeepsStableCommandName(t *testing.T) {
 		t.Fatal("install-smoke.yml should keep the stable command name gh dep-risk")
 	}
 }
+
+func TestManualWorkflowUsesOptionalCrossRepoCommentToken(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join(".github", "workflows", "dep-risk-manual.yml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	content := string(data)
+
+	want := "GH_TOKEN: ${{ inputs.comment && secrets.DEP_RISK_GH_TOKEN || secrets.GITHUB_TOKEN }}"
+	if !strings.Contains(content, want) {
+		t.Fatalf("dep-risk-manual.yml missing optional cross-repo comment token fallback %q", want)
+	}
+}

@@ -78,7 +78,7 @@ jobs:
         id: dep_risk
         shell: bash
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ inputs.comment && secrets.DEP_RISK_GH_TOKEN || secrets.GITHUB_TOKEN }}
           INPUT_PR: ${{ inputs.pr }}
           INPUT_REPO: ${{ inputs.repo }}
           INPUT_LANG: ${{ inputs.lang }}

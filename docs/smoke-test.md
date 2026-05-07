@@ -59,6 +59,7 @@ For owned live smoke runs:
 gh workflow run .github/workflows/dep-risk-manual.yml -f pr=1 -f repo=rad1092/dep-risk-live-e2e -f no_registry=true
 gh workflow run .github/workflows/dep-risk-manual.yml -f pr=2 -f repo=rad1092/dep-risk-live-e2e -f no_registry=true
 gh workflow run .github/workflows/dep-risk-manual.yml -f pr=4 -f repo=rad1092/dep-risk-live-e2e -f no_registry=true
+gh workflow run .github/workflows/dep-risk-manual.yml -f pr=1 -f repo=rad1092/dep-risk-live-e2e -f comment=true -f no_registry=true
 gh run watch
 ```
 
@@ -71,9 +72,10 @@ Verify:
 - for private cross-repo targets, verify the workflow token can read the target
   PR repository; otherwise the run can fail before comment upsert or artifact
   upload
-- remote comment smoke needs a PR in the workflow repository itself or a token
-  that can write issue comments in the target repository; the default
-  `GITHUB_TOKEN` cannot write comments to unrelated cross-repo targets
+- remote cross-repo comment smoke needs the `DEP_RISK_GH_TOKEN` repository
+  secret with read access to the target PR repository and issue-comment write
+  permission there; otherwise the workflow falls back to `GITHUB_TOKEN`, which
+  cannot write comments to unrelated cross-repo targets
 
 ## 3. Remote install smoke
 
