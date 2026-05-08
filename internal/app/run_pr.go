@@ -14,6 +14,7 @@ import (
 
 	"gh-dep-risk/internal/analysis"
 	ghclient "gh-dep-risk/internal/github"
+	gomoddeps "gh-dep-risk/internal/gomod"
 	"gh-dep-risk/internal/npm"
 	pythondeps "gh-dep-risk/internal/python"
 	"gh-dep-risk/internal/render"
@@ -116,6 +117,14 @@ func RunPR(ctx context.Context, deps RunPRDependencies, opts RunPROptions) error
 		}
 		if shouldUsePythonLocalFallback(target, reviewSnapshot.Available) {
 			input, err := loadPythonLocalInput(ctx, cache, pr.BaseSHA, pr.HeadSHA, target)
+			if err != nil {
+				return &ExitError{Code: 1, Err: err}
+			}
+			localInputs = append(localInputs, input)
+			continue
+		}
+		if shouldUseGoLocalFallback(target, reviewSnapshot.Available) {
+			input, err := loadGoLocalInput(ctx, cache, pr.BaseSHA, pr.HeadSHA, target)
 			if err != nil {
 				return &ExitError{Code: 1, Err: err}
 			}
@@ -382,6 +391,34 @@ func shouldUsePythonLocalFallback(target analysis.AnalysisTarget, dependencyRevi
 	default:
 		return false
 	}
+}
+
+func shouldUseGoLocalFallback(target analysis.AnalysisTarget, dependencyReviewAvailable bool) bool {
+	return !dependencyReviewAvailable && target.PackageManager == "go"
+}
+
+func loadGoLocalInput(ctx context.Context, cache *repoDataCache, baseSHA, headSHA string, target analysis.AnalysisTarget) (analysis.LocalInput, error) {
+	baseData, err := cache.file(ctx, baseSHA, target.ManifestPath)
+	if err != nil {
+		return analysis.LocalInput{}, err
+	}
+	headData, err := cache.file(ctx, headSHA, target.ManifestPath)
+	if err != nil {
+		return analysis.LocalInput{}, err
+	}
+
+	var baseSumData, headSumData []byte
+	if strings.TrimSpace(target.LockfilePath) != "" {
+		baseSumData, err = cache.file(ctx, baseSHA, target.LockfilePath)
+		if err != nil {
+			return analysis.LocalInput{}, err
+		}
+		headSumData, err = cache.file(ctx, headSHA, target.LockfilePath)
+		if err != nil {
+			return analysis.LocalInput{}, err
+		}
+	}
+	return gomoddeps.BuildLocalInput(target, baseData, headData, baseSumData, headSumData)
 }
 
 func loadPythonLocalInput(ctx context.Context, cache *repoDataCache, baseSHA, headSHA string, target analysis.AnalysisTarget) (analysis.LocalInput, error) {

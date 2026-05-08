@@ -5,6 +5,7 @@ go 1.26
 require (
 	github.com/cli/go-gh/v2 v2.12.2
 	github.com/pelletier/go-toml/v2 v2.3.1
+	golang.org/x/mod v0.29.0
 	gopkg.in/yaml.v3 v3.0.1
 )
 

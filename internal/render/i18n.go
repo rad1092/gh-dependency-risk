@@ -176,6 +176,18 @@ func localizeNote(note analysis.Note, lang string) string {
 			return fmt.Sprintf("%s resolves from a non-default package source: %s", note.Dependency, note.Detail)
 		case analysis.NoteUnsupportedDependency:
 			return fmt.Sprintf("Some dependency entries were not analyzed by local fallback: %s", note.Detail)
+		case analysis.NoteGoReplaceDirective:
+			return fmt.Sprintf("Go replace directive changed for %s: %s", note.Dependency, note.Detail)
+		case analysis.NoteGoLocalReplace:
+			return fmt.Sprintf("Go module %s uses a local replace target: %s", note.Dependency, note.Detail)
+		case analysis.NoteGoPseudoVersion:
+			return fmt.Sprintf("Go module %s uses a pseudo-version: %s", note.Dependency, note.Detail)
+		case analysis.NoteGoChecksumChanged:
+			return fmt.Sprintf("Go checksum evidence changed: %s", note.Detail)
+		case analysis.NoteGoDirectiveChanged:
+			return fmt.Sprintf("Go language directive changed: %s", note.Detail)
+		case analysis.NoteGoToolchainChanged:
+			return fmt.Sprintf("Go toolchain directive changed: %s", note.Detail)
 		default:
 			return note.Code
 		}
@@ -188,6 +200,18 @@ func localizeNote(note analysis.Note, lang string) string {
 		return fmt.Sprintf("%s 패키지가 기본 레지스트리 외 소스로 해석됩니다: %s", note.Dependency, note.Detail)
 	case analysis.NoteUnsupportedDependency:
 		return fmt.Sprintf("일부 의존성 항목은 local fallback에서 분석되지 않았습니다: %s", note.Detail)
+	case analysis.NoteGoReplaceDirective:
+		return fmt.Sprintf("Go replace 지시자가 변경되었습니다(%s): %s", note.Dependency, note.Detail)
+	case analysis.NoteGoLocalReplace:
+		return fmt.Sprintf("Go 모듈 %s가 local replace 대상을 사용합니다: %s", note.Dependency, note.Detail)
+	case analysis.NoteGoPseudoVersion:
+		return fmt.Sprintf("Go 모듈 %s가 pseudo-version을 사용합니다: %s", note.Dependency, note.Detail)
+	case analysis.NoteGoChecksumChanged:
+		return fmt.Sprintf("Go checksum 근거가 변경되었습니다: %s", note.Detail)
+	case analysis.NoteGoDirectiveChanged:
+		return fmt.Sprintf("Go language 지시자가 변경되었습니다: %s", note.Detail)
+	case analysis.NoteGoToolchainChanged:
+		return fmt.Sprintf("Go toolchain 지시자가 변경되었습니다: %s", note.Detail)
 	default:
 		return note.Code
 	}

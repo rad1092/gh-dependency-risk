@@ -62,6 +62,24 @@ func TestAnalyzeLocalUnknownScopeDoesNotUseAddedRuntimeOrDevDrivers(t *testing.T
 	}
 }
 
+func TestAnalyzeLocalTransitiveScopeIsNotDirectAndDoesNotScoreAsDirect(t *testing.T) {
+	result := AnalyzeLocalDirectDependencies(LocalInput{
+		Target:                    pythonRequirementsTarget(),
+		DependencyReviewAvailable: false,
+		HeadDependencies: []LocalDependency{
+			{Name: "golang.org/x/sys", Requirement: "v0.31.0", Version: "v0.31.0", Scope: ScopeTransitive},
+		},
+	})
+
+	if len(result.ChangedDependencies) != 1 || result.ChangedDependencies[0].Name != "golang.org/x/sys" {
+		t.Fatalf("expected transitive dependency change, got %#v", result.ChangedDependencies)
+	}
+	change := result.ChangedDependencies[0]
+	if change.Direct || change.Scope != ScopeTransitive || change.Score != 0 || len(change.RiskDrivers) != 0 {
+		t.Fatalf("expected transitive dependency not to score as direct, got %#v", change)
+	}
+}
+
 func TestAnalyzeLocalNonRegistrySourceIsInformational(t *testing.T) {
 	withoutSource := AnalyzeLocalDirectDependencies(LocalInput{
 		Target:                    pythonRequirementsTarget(),

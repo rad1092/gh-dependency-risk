@@ -554,10 +554,10 @@ func TestRunPRPathMatchesManifestPathAndDirectoryForNonJSTarget(t *testing.T) {
 	}
 }
 
-func TestRunPRDependencyReviewUnavailableForNonJSTargetIsActionable(t *testing.T) {
+func TestRunPRDependencyReviewUnavailableForAPIOnlyNonJSTargetIsActionable(t *testing.T) {
 	client := newFakeGitHubClient()
 	client.pr = ghclient.PullRequest{
-		Title:       "Update go module",
+		Title:       "Update Rust dependency",
 		Draft:       false,
 		Number:      123,
 		BaseSHA:     "base-sha",
@@ -565,16 +565,16 @@ func TestRunPRDependencyReviewUnavailableForNonJSTargetIsActionable(t *testing.T
 		URL:         "https://github.com/owner/repo/pull/123",
 		AuthorLogin: "octocat",
 	}
-	client.files = []ghclient.PullRequestFile{{Filename: "backend/go.mod", Status: "modified"}}
-	client.repositoryFilesByRef["base-sha"] = []string{"backend/go.mod"}
-	client.repositoryFilesByRef["head-sha"] = []string{"backend/go.mod"}
+	client.files = []ghclient.PullRequestFile{{Filename: "backend/Cargo.toml", Status: "modified"}}
+	client.repositoryFilesByRef["base-sha"] = []string{"backend/Cargo.toml"}
+	client.repositoryFilesByRef["head-sha"] = []string{"backend/Cargo.toml"}
 	client.compareErr = &api.HTTPError{StatusCode: 404, Message: "dependency review disabled"}
 
 	_, _, err := runPRWithClient(t, client, RunPROptions{Paths: []string{"backend"}})
 	assertExitCode(t, err, 1)
 	for _, expected := range []string{
 		"dependency review is unavailable",
-		"backend/go.mod",
+		"backend/Cargo.toml",
 		"npm/pnpm/yarn",
 	} {
 		if !strings.Contains(err.Error(), expected) {

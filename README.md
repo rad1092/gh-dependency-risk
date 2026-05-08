@@ -28,12 +28,15 @@ fallback. An asciinema-compatible recording is also checked in at
     `pyproject.toml` direct dependency declarations; Poetry may use
     `poetry.lock` and PEP 621 may use `uv.lock` to enrich direct resolved
     versions and source metadata, with no resolver or full transitive analysis
+  - Go modules: `go.mod` `require` and `replace` changes, with `go.sum`
+    checksum changes treated as evidence only; no resolver, full module graph,
+    or `go list` / `go mod` execution
 - one Go binary
 - dependency review API first, local fallback only when dependency review is
   unavailable
 - no server, webhook receiver, GitHub App, DB, queue, dashboard, bun, or
-  broad non-JS local fallback beyond the narrow Python direct-declaration and
-  direct lockfile-enrichment fallback in this release
+  broad local fallback beyond the narrow JavaScript, Python, and Go module
+  static-file fallback in this release
 
 Dependency Review ecosystems surfaced in this release when GitHub provides
 them:
@@ -288,7 +291,8 @@ The score model stays heuristic, deterministic, and intentionally auditable.
 | Yarn Classic | Dependency Review data is used when available. | Local fallback analyzes `package.json` and classic `yarn.lock`. |
 | Yarn Berry / PnP | Dependency Review data may be surfaced when GitHub provides it. | Local fallback fails honestly when the lockfile cannot be analyzed faithfully. |
 | Python `requirements.txt` / PEP 621 `pyproject.toml` + optional `uv.lock` / Poetry `pyproject.toml` + optional `poetry.lock` | Dependency Review data is used when available. | Local fallback compares direct dependency declarations and can use `uv.lock` or `poetry.lock` to enrich matching direct resolved versions and source metadata. No resolver, broad lockfile support, or full transitive analysis. |
-| Cargo, Composer, Go modules, Maven, RubyGems, SwiftPM | Dependency Review data may be surfaced when GitHub provides it. | No local fallback in this release. |
+| Go modules | Dependency Review data is used when available. | Local fallback analyzes static `go.mod` `require`/`replace` changes. `go.sum` is checksum evidence only; no resolver, full module graph, `go list`, or `go mod` execution. |
+| Cargo, Composer, Maven, RubyGems, SwiftPM | Dependency Review data may be surfaced when GitHub provides it. | No local fallback in this release. |
 
 ## Behavior
 
@@ -317,6 +321,8 @@ Supported target shapes:
 - Poetry `pyproject.toml` direct dependencies from `[tool.poetry.dependencies]`,
   `[tool.poetry.dev-dependencies]`, and `[tool.poetry.group.<name>.dependencies]`,
   with optional `poetry.lock` direct resolved-version enrichment
+- Go modules `go.mod` `require` and `replace` changes, with optional sibling
+  `go.sum` checksum evidence notes only
 
 ### Mixed ecosystems and JS workspaces
 
@@ -385,9 +391,21 @@ Notes:
 - `poetry.lock` package changes without a matching direct dependency declaration
   in `pyproject.toml` are treated as transitive-only and do not create report
   changes
+- Go modules local fallback is static: it reads `go.mod` and optional sibling
+  `go.sum` content from the repository and never runs `go list`, `go mod`,
+  `go env`, or network module metadata lookups
+- Go modules local fallback reports `go.mod` `require` additions, removals,
+  updates, direct versus `// indirect` requirements, and `replace` additions,
+  removals, or changes; local `replace` targets are surfaced as non-registry
+  source validation notes/actions
+- Go modules local fallback may note pseudo-versions, `go` directive changes,
+  `toolchain` directive changes, and `go.sum` checksum evidence changes only
+  when the target also has a meaningful `require` or `replace` result
+- `go.sum` is not treated as a lockfile or dependency tree, so `go.sum`-only
+  checksum changes do not create dependency-change report entries
 - out of scope for now: bun, `package.json5`, `package.yaml`, pnpm catalogs,
-  pnpm branch lockfiles, broad non-JS local fallback, Go module local fallback,
-  and full Yarn Plug'n'Play graph resolution
+  pnpm branch lockfiles, broad non-JS resolver-style fallback, Go module graph
+  reconstruction, and full Yarn Plug'n'Play graph resolution
 
 If dependency review returns `403` or `404`, `gh-dep-risk` falls back to
 supported local fallback analysis and explicitly reports

@@ -333,6 +333,7 @@ func discoverAPIOnlyTargets(ctx context.Context, cache *repoDataCache, baseRef, 
 	grouped := map[string][]analysis.AnalysisTarget{}
 	poetryLockfiles := pathSet(filterPaths(files, "poetry.lock"))
 	uvLockfiles := pathSet(filterPaths(files, "uv.lock"))
+	goSumFiles := pathSet(filterPaths(files, "go.sum"))
 	for _, filePath := range files {
 		cleaned := normalizeRepoPath(filePath)
 		base := path.Base(cleaned)
@@ -346,6 +347,7 @@ func discoverAPIOnlyTargets(ctx context.Context, cache *repoDataCache, baseRef, 
 			ecosystem, manager = review.EcosystemComposer, review.PackageManagerComposer
 		case "go.mod":
 			ecosystem, manager = review.EcosystemGoModules, review.PackageManagerGo
+			localFallback = true
 		case "pom.xml":
 			ecosystem, manager = review.EcosystemMaven, review.PackageManagerMaven
 		case "requirements.txt":
@@ -387,6 +389,12 @@ func discoverAPIOnlyTargets(ctx context.Context, cache *repoDataCache, baseRef, 
 		if manager == review.PackageManagerPyProject {
 			candidate := uvLockfilePathForDir(manifestDir(cleaned))
 			if _, ok := uvLockfiles[candidate]; ok {
+				lockfilePath = candidate
+			}
+		}
+		if manager == review.PackageManagerGo {
+			candidate := goSumPathForDir(manifestDir(cleaned))
+			if _, ok := goSumFiles[candidate]; ok {
 				lockfilePath = candidate
 			}
 		}
@@ -776,6 +784,14 @@ func uvLockfilePathForDir(dir string) string {
 	return cleaned + "/uv.lock"
 }
 
+func goSumPathForDir(dir string) string {
+	cleaned := normalizeRepoPath(dir)
+	if cleaned == "" {
+		return "go.sum"
+	}
+	return cleaned + "/go.sum"
+}
+
 func normalizeRepoPath(value string) string {
 	cleaned := path.Clean(strings.TrimSpace(strings.ReplaceAll(value, "\\", "/")))
 	switch cleaned {
@@ -975,7 +991,7 @@ func manifestPaths(targets []discoveredTarget) []string {
 
 func fallbackUnavailableReason(ecosystem review.Ecosystem) string {
 	switch ecosystem {
-	case review.EcosystemCargo, review.EcosystemComposer, review.EcosystemGoModules, review.EcosystemMaven, review.EcosystemRubyGems, review.EcosystemSwiftPM:
+	case review.EcosystemCargo, review.EcosystemComposer, review.EcosystemMaven, review.EcosystemRubyGems, review.EcosystemSwiftPM:
 		return "dependency review is required for this ecosystem in this release"
 	default:
 		return ""

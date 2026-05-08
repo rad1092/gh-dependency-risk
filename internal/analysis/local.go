@@ -27,6 +27,7 @@ type LocalInput struct {
 	BaseDependencies          []LocalDependency
 	HeadDependencies          []LocalDependency
 	Unsupported               []LocalUnsupportedEntry
+	Notes                     []Note
 }
 
 func AnalyzeLocalDirectDependencies(input LocalInput) AnalysisResult {
@@ -35,7 +36,7 @@ func AnalyzeLocalDirectDependencies(input LocalInput) AnalysisResult {
 	names := localDependencyNames(base, head)
 
 	changes := make([]DependencyChange, 0)
-	notes := make([]Note, 0)
+	notes := append([]Note(nil), input.Notes...)
 	for _, name := range names {
 		before, beforeOK := base[name]
 		after, afterOK := head[name]
@@ -121,21 +122,26 @@ func localDependencyChange(target AnalysisTarget, before LocalDependency, before
 	change := DependencyChange{
 		Manifest: target.ManifestPath,
 		Target:   normalizeTargetDisplayName(target),
-		Direct:   true,
 	}
 	switch {
 	case !beforeOK && afterOK:
 		change.Name = after.Name
 		change.ChangeType = ChangeAdded
 		change.Scope = normalizeLocalScope(after.Scope)
+		change.Direct = localDependencyDirect(after)
 	case beforeOK && !afterOK:
 		change.Name = before.Name
 		change.ChangeType = ChangeRemoved
 		change.Scope = normalizeLocalScope(before.Scope)
+		change.Direct = localDependencyDirect(before)
 	default:
 		change.Name = after.Name
 		change.ChangeType = ChangeUpdated
 		change.Scope = normalizeLocalScope(after.Scope)
+		change.Direct = localDependencyDirect(after)
+		if !change.Direct {
+			change.Direct = localDependencyDirect(before)
+		}
 	}
 	if beforeOK {
 		change.FromRequirement = before.Requirement
@@ -154,11 +160,15 @@ func localDependencyChange(target AnalysisTarget, before LocalDependency, before
 
 func normalizeLocalScope(scope DependencyScope) DependencyScope {
 	switch scope {
-	case ScopeRuntime, ScopeOptional, ScopeDev, ScopeUnknown:
+	case ScopeRuntime, ScopeOptional, ScopeDev, ScopeTransitive, ScopeUnknown:
 		return scope
 	default:
 		return ScopeUnknown
 	}
+}
+
+func localDependencyDirect(dependency LocalDependency) bool {
+	return normalizeLocalScope(dependency.Scope) != ScopeTransitive
 }
 
 func scoreLocalDependencyChange(change DependencyChange) (int, []string) {
@@ -174,7 +184,7 @@ func scoreLocalDependencyChange(change DependencyChange) (int, []string) {
 
 	add(change.ChangeType == ChangeAdded && change.Direct && (change.Scope == ScopeRuntime || change.Scope == ScopeOptional), scoreAddedDirectRuntime, DriverAddedDirectRuntime)
 	add(change.ChangeType == ChangeAdded && change.Direct && change.Scope == ScopeDev, scoreAddedDirectDev, DriverAddedDirectDev)
-	add(isMajorBump(change.FromVersion, change.ToVersion, change.FromRequirement, change.ToRequirement), scoreMajorVersionBump, DriverMajorVersionBump)
+	add(change.Direct && isMajorBump(change.FromVersion, change.ToVersion, change.FromRequirement, change.ToRequirement), scoreMajorVersionBump, DriverMajorVersionBump)
 
 	if score > changeScoreCap {
 		score = changeScoreCap

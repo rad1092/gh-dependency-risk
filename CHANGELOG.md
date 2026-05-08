@@ -4,6 +4,9 @@ All notable changes to `gh-dep-risk` will be documented in this file.
 
 ## Unreleased
 
+- Added Go modules local fallback for static `go.mod` `require`/`replace`
+  changes, with `go.sum` checksum evidence notes only when Dependency Review is
+  unavailable.
 - Hardened `uv.lock` local fallback edge cases around direct resolved-version
   and source updates and unsupported source shapes.
 - Added PEP 621 `pyproject.toml` local fallback enrichment from matching

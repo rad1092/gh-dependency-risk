@@ -80,6 +80,12 @@ const (
 	NoteNonRegistrySource        = "non_registry_source"
 	NoteApproximateAttribution   = "approximate_target_attribution"
 	NoteUnsupportedDependency    = "unsupported_dependency_entry"
+	NoteGoReplaceDirective       = "go_replace_directive"
+	NoteGoLocalReplace           = "go_local_replace"
+	NoteGoPseudoVersion          = "go_pseudo_version"
+	NoteGoChecksumChanged        = "go_checksum_changed"
+	NoteGoDirectiveChanged       = "go_directive_changed"
+	NoteGoToolchainChanged       = "go_toolchain_directive_changed"
 )
 
 type AnalysisTarget struct {

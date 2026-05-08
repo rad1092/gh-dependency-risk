@@ -90,6 +90,55 @@ func TestRenderNonRegistrySourceNoteIsReadable(t *testing.T) {
 	}
 }
 
+func TestRenderGoFallbackNotesAreReadable(t *testing.T) {
+	report := noteReport()
+	report.Analysis.Notes = []analysis.Note{
+		{Code: analysis.NoteGoReplaceDirective, Dependency: "example.com/lib", Detail: "replace added: example.com/lib => ../lib"},
+		{Code: analysis.NoteGoLocalReplace, Dependency: "example.com/lib", Detail: "example.com/lib => ../lib"},
+		{Code: analysis.NoteGoPseudoVersion, Dependency: "example.com/pseudo", Detail: "v0.0.0-20240101120000-abcdefabcdef"},
+		{Code: analysis.NoteGoChecksumChanged, Detail: "go.sum checksum evidence changed: added=1 removed=0"},
+		{Code: analysis.NoteGoDirectiveChanged, Detail: "go 1.22 -> 1.23"},
+		{Code: analysis.NoteGoToolchainChanged, Detail: "toolchain go1.22.0 -> go1.23.1"},
+	}
+
+	englishMarkdown, err := Render(report, "markdown", "en")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, expected := range []string{
+		"Go replace directive changed",
+		"uses a local replace target",
+		"uses a pseudo-version",
+		"Go checksum evidence changed",
+		"Go language directive changed",
+		"Go toolchain directive changed",
+	} {
+		if !strings.Contains(englishMarkdown, expected) {
+			t.Fatalf("expected English Go note %q, got %q", expected, englishMarkdown)
+		}
+	}
+
+	koreanMarkdown, err := Render(report, "markdown", "ko")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, raw := range []string{
+		analysis.NoteGoReplaceDirective,
+		analysis.NoteGoLocalReplace,
+		analysis.NoteGoPseudoVersion,
+		analysis.NoteGoChecksumChanged,
+		analysis.NoteGoDirectiveChanged,
+		analysis.NoteGoToolchainChanged,
+	} {
+		if strings.Contains(koreanMarkdown, raw) {
+			t.Fatalf("did not expect Korean output to expose raw note code %q, got %q", raw, koreanMarkdown)
+		}
+	}
+	if !strings.Contains(koreanMarkdown, "Go") || !strings.Contains(koreanMarkdown, "example.com/lib") {
+		t.Fatalf("expected readable Korean Go notes, got %q", koreanMarkdown)
+	}
+}
+
 func noteReport() Report {
 	return Report{
 		Repo: "owner/repo",
