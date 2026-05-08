@@ -47,6 +47,8 @@ go build -ldflags "-s -w -X gh-dep-risk/cmd.version=$version -X gh-dep-risk/cmd.
 Before tagging, run the local binary against real pull requests if you have
 GitHub auth available. Prefer at least one smaller PR and one larger PR so the
 final release is not validated only against fixtures.
+For the current read-only fixture matrix and comment-smoke split, see
+[docs/smoke-test.md](docs/smoke-test.md).
 
 If you have GitHub auth and repository access available, run:
 
@@ -107,7 +109,7 @@ gh dep-risk version --json
 Verify the version matches the new release tag and does not report only `dev`.
 The install path intentionally uses `rad1092/gh-dep-risk` so GitHub CLI keeps
 the command name `gh dep-risk`; the repository page redirects to the current
-`gh-dependency-risk` slug.
+`rad1092/gh-dependency-risk` slug.
 
 If you want to avoid touching your everyday GitHub CLI state, set a temporary
 `GH_CONFIG_DIR` before running the install smoke.

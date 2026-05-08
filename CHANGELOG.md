@@ -4,6 +4,10 @@ All notable changes to `gh-dep-risk` will be documented in this file.
 
 ## Unreleased
 
+- Cleaned up docs, examples, and smoke-test guidance to separate Dependency
+  Review API coverage from local fallback support and document the expanded
+  Python, Go, Yarn Berry, and Bun scope without overstating unsupported
+  resolver, graph, registry, SARIF, license, or OSV capabilities.
 - Hardened Bun local fallback edge cases around JSONC parsing, direct lockfile
   matching, binary lockfile handling, checksum gating, and source protocols.
 - Added narrow Bun local fallback for direct `package.json` declarations

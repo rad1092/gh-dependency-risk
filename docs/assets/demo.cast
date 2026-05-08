@@ -9,7 +9,7 @@
 [2.5,"o","Summary:\r\n"]
 [2.7,"o","- 3 dependency changes were detected.\r\n"]
 [2.9,"o","- 1 newly added transitive dependencies were detected.\r\n"]
-[3.1,"o","- Dependency Review was unavailable, so lockfile-only fallback analysis was used.\r\n"]
+[3.1,"o","- Dependency Review was unavailable, so local fallback analysis was used.\r\n"]
 [3.5,"o","- Top risk signals: direct runtime addition.\r\n\r\n"]
 [4.0,"o","Targets:\r\n"]
 [4.2,"o","- yarn-app [standalone, ecosystem=yarn] score=13 (low), blast=medium\r\n"]

@@ -25,23 +25,65 @@ Verify:
 - if the target repository has a very large lockfile, verify the run does not
   fail on a GitHub contents API `encoding: none` response
 
-### Owned live matrix
+### Read-only analysis smoke
 
-Use the owned matrix repository for repeatable read-only analysis checks, and
-use the comments repository only when intentionally exercising comment upsert:
+Use the owned matrix repository for repeatable read-only analysis checks. These
+commands must not write PR comments:
 
 ```bash
 go build -o gh-dep-risk .
 ./gh-dep-risk pr 3 --repo rad1092/gh-dep-risk-smoke-matrix --lang en --format json --no-registry
 ./gh-dep-risk pr 1 --repo rad1092/gh-dep-risk-smoke-matrix --lang en --format json --no-registry
 ./gh-dep-risk pr 2 --repo rad1092/gh-dep-risk-smoke-matrix --lang en --format json --no-registry
+```
+
+Verify:
+
+- npm, pnpm workspace, and Yarn Classic standalone reports all render
+- JSON output includes `score`, `level`, and `dependency_review_available`
+
+Current owned live read-only fixture coverage:
+
+| Repo | PR | Coverage |
+| --- | --- | --- |
+| `rad1092/gh-dep-risk-smoke-matrix` | `#3` | npm `package.json` + `package-lock.json` |
+| `rad1092/gh-dep-risk-smoke-matrix` | `#1` | pnpm `package.json` + `pnpm-lock.yaml` with workspace discovery |
+| `rad1092/gh-dep-risk-smoke-matrix` | `#2` | Yarn Classic `package.json` + `yarn.lock` |
+
+Do not document a live smoke command for another ecosystem until a stable owned
+fixture PR exists. Until then, rely on repo tests and local fixture-backed
+checks for the broader local fallback matrix.
+
+### Local fallback support smoke matrix
+
+This matrix is for release checklist coverage. Dependency Review remains the
+primary path; local fallback is only used when Dependency Review is unavailable.
+
+| Area | Local fallback smoke expectation |
+| --- | --- |
+| npm package-lock | Direct dependency changes from `package.json` and `package-lock.json` are reported. |
+| pnpm lockfile/workspaces | `pnpm-lock.yaml` and `pnpm-workspace.yaml` discovery select root/workspace targets. |
+| Yarn Classic | Classic `yarn.lock` direct dependency changes are reported. |
+| Python `requirements.txt` | Direct declarations are parsed; unsupported entries stay notes-only. |
+| Python PEP 621 `pyproject.toml` | `[project].dependencies` and `[project.optional-dependencies]` direct declarations are parsed. |
+| Poetry | Poetry direct declarations are parsed and matching `poetry.lock` entries enrich direct resolved versions/source. |
+| uv | Matching `uv.lock` entries enrich PEP 621 direct dependencies only. |
+| Go modules | `go.mod` `require`/`replace` changes are reported; `go.sum` is checksum evidence only. |
+| Yarn Berry / modern Yarn | Direct `package.json` declarations are matched to modern `yarn.lock`; `.yarnrc.yml` is detection/nodeLinker note-only. |
+| Bun text lockfile | Direct `package.json` declarations are matched to text `bun.lock`. |
+| Bun binary lockfile | `bun.lockb` is unsupported and must not create scored dependency changes. |
+
+### Comment smoke
+
+Comment smoke intentionally writes PR timeline issue comments. Keep it separate
+from read-only analysis smoke:
+
+```bash
 ./gh-dep-risk pr 1 --repo rad1092/gh-dep-risk-smoke-comments --lang en --comment --no-registry
 ```
 
 Verify:
 
-- npm, pnpm workspace, and Yarn standalone reports all render
-- JSON output includes `score`, `level`, and `dependency_review_available`
 - comment mode is used only on `rad1092/gh-dep-risk-smoke-comments`
 - PR `#1` has exactly one `<!-- gh-dep-risk -->` marker comment for the current
   authenticated user; marker comments owned by other users or bots are left
@@ -61,7 +103,11 @@ gh workflow run .github/workflows/dep-risk-manual.yml -f pr=3 -f repo=rad1092/gh
 gh workflow run .github/workflows/dep-risk-manual.yml -f pr=1 -f repo=rad1092/gh-dep-risk-smoke-matrix -f no_registry=true
 gh workflow run .github/workflows/dep-risk-manual.yml -f pr=2 -f repo=rad1092/gh-dep-risk-smoke-matrix -f no_registry=true
 gh run watch
+```
 
+For comment smoke, run the target smoke repository's own workflow:
+
+```bash
 gh workflow run comment-smoke.yml --repo rad1092/gh-dep-risk-smoke-comments -f pr=1 -f source_ref=main -f no_registry=true
 gh run watch --repo rad1092/gh-dep-risk-smoke-comments
 ```

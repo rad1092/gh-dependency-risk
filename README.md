@@ -12,14 +12,17 @@ webhook, queue, database, or dashboard infrastructure.
 
 ![gh-dep-risk animated terminal demo](docs/assets/demo.gif)
 
-The animated terminal capture above comes from a live E2E PR using Yarn local
-fallback. An asciinema-compatible recording is also checked in at
-[docs/assets/demo.cast](docs/assets/demo.cast).
+The animated terminal capture above is an illustrative live E2E PR using Yarn
+local fallback. An asciinema-compatible recording is also checked in at
+[docs/assets/demo.cast](docs/assets/demo.cast); the checked-in examples under
+[`docs/examples`](docs/examples) are the exact renderer-backed output fixtures.
 
 ## Scope
 
 - on-demand pull request dependency review through GitHub Dependency Review
-- local fallback support matrix:
+  API when GitHub provides dependency-review data for the PR
+- local fallback only when Dependency Review is unavailable, such as `403` or
+  `404`, for these static-file targets:
   - npm: `package.json`, `package-lock.json`
   - pnpm: `package.json`, `pnpm-lock.yaml`
   - pnpm workspace discovery: `pnpm-workspace.yaml`
@@ -43,8 +46,8 @@ fallback. An asciinema-compatible recording is also checked in at
   broad local fallback beyond the narrow JavaScript, Python, and Go module
   static-file fallback in this release
 
-Dependency Review ecosystems surfaced in this release when GitHub provides
-them:
+Dependency Review API ecosystems surfaced in this release when GitHub provides
+them are separate from local fallback support:
 
 - Cargo
 - Composer
@@ -112,10 +115,10 @@ The installed command remains `gh dep-risk`.
 The repository itself also needs the `gh-` prefix because GitHub CLI extension
 install requires remote extension repositories to start with `gh-`.
 
-The public repository slug is `gh-dependency-risk` for readability, but the
-stable install path intentionally remains `rad1092/gh-dep-risk` so GitHub CLI
-registers the command as `gh dep-risk`. Installing the readability slug directly
-registers the longer command name `gh dependency-risk`.
+The public repository slug is `rad1092/gh-dependency-risk` for readability, but
+the stable install path intentionally remains `rad1092/gh-dep-risk` so GitHub
+CLI registers the command as `gh dep-risk`. Installing the readability slug
+directly registers the longer command name `gh dependency-risk`.
 
 The checkout directory name must still start with `gh-` for local extension
 install to work, so use a local folder such as `gh-dep-risk` when you clone
@@ -138,19 +141,28 @@ gh dep-risk version
 gh dep-risk version --json
 ```
 
-Typical live checks against owned fixture repositories:
+Typical read-only live checks against owned fixture repositories:
 
 ```bash
 gh dep-risk pr 3 --repo rad1092/gh-dep-risk-smoke-matrix --lang en --format json --no-registry
 gh dep-risk pr 1 --repo rad1092/gh-dep-risk-smoke-matrix --lang en --format json --no-registry
 gh dep-risk pr 2 --repo rad1092/gh-dep-risk-smoke-matrix --lang en --format json --no-registry
+```
+
+The matrix repository currently covers read-only npm, pnpm workspace, and Yarn
+Classic analysis. Broader local fallback coverage is documented in
+[docs/smoke-test.md](docs/smoke-test.md) and backed by repo tests unless an
+owned live fixture PR is listed there.
+
+Comment smoke is intentionally separate because it writes a PR timeline issue
+comment:
+
+```bash
 gh dep-risk pr 1 --repo rad1092/gh-dep-risk-smoke-comments --lang en --comment --no-registry
 ```
 
-The matrix repository covers read-only npm, pnpm, and Yarn analysis. The
-comments repository is the only live example that intentionally writes a PR
-timeline comment; it may contain one marker comment per authenticated identity
-such as `rad1092` locally and `github-actions[bot]` from Actions.
+The comments repository may contain one marker comment per authenticated
+identity such as `rad1092` locally and `github-actions[bot]` from Actions.
 
 Command shape:
 
@@ -287,7 +299,10 @@ The score model stays heuristic, deterministic, and intentionally auditable.
 - this keeps the main driver explainable while still reflecting multi-target
   or multi-change PRs without turning the score into an opaque sum
 
-## Fallback Matrix
+## Dependency Review And Fallback Matrix
+
+Dependency Review API data is always preferred when available. Local fallback
+is used only when the Dependency Review API is unavailable for the PR.
 
 | Ecosystem / manager | With GitHub Dependency Review | Without GitHub Dependency Review |
 | --- | --- | --- |
@@ -434,10 +449,13 @@ Notes:
   when the target also has a meaningful `require` or `replace` result
 - `go.sum` is not treated as a lockfile or dependency tree, so `go.sum`-only
   checksum changes do not create dependency-change report entries
-- out of scope for now: `bun.lockb`, Bun resolver/workspace graph semantics,
-  `package.json5`, `package.yaml`, pnpm catalogs,
-  pnpm branch lockfiles, broad non-JS resolver-style fallback, Go module graph
-  reconstruction, and full Yarn Plug'n'Play graph resolution
+- out of scope for now: Python resolver behavior, PyPI/npm/module registry
+  metadata lookup, `bun.lockb`, `bunfig.toml`, Bun resolver/workspace graph
+  semantics, `package.json5`, `package.yaml`, pnpm catalogs, pnpm branch
+  lockfiles, broad non-JS resolver-style fallback, Go module graph
+  reconstruction, full Yarn Plug'n'Play graph resolution, `.pnp.cjs` parsing,
+  Yarn plugin/constraint interpretation, SARIF output, license risk, and
+  OSV/Socket integration
 
 If dependency review returns `403` or `404`, `gh-dep-risk` falls back to
 supported local fallback analysis and explicitly reports
