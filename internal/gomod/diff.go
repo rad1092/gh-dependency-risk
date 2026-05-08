@@ -55,10 +55,11 @@ func dependenciesFromManifest(manifest Manifest) []analysis.LocalDependency {
 	}
 
 	for _, replacement := range manifest.Replacements {
-		dependency := dependencies[replacement.OldPath]
+		key := replacementDependencyKey(replacement, dependencies)
+		dependency := dependencies[key]
 		if dependency.Name == "" {
 			dependency = analysis.LocalDependency{
-				Name:  replacement.OldPath,
+				Name:  replacementIdentity(replacement),
 				Scope: analysis.ScopeUnknown,
 			}
 			if replacement.OldVersion != "" {
@@ -70,7 +71,7 @@ func dependenciesFromManifest(manifest Manifest) []analysis.LocalDependency {
 			}
 		}
 		dependency.Source = replacementSource(replacement)
-		dependencies[replacement.OldPath] = dependency
+		dependencies[key] = dependency
 	}
 
 	names := make([]string, 0, len(dependencies))
@@ -97,9 +98,26 @@ func replacementSource(replacement Replacement) string {
 	return "replace:" + target
 }
 
+func replacementDependencyKey(replacement Replacement, dependencies map[string]analysis.LocalDependency) string {
+	if dependency, ok := dependencies[replacement.OldPath]; ok {
+		if replacement.OldVersion == "" || dependency.Version == replacement.OldVersion || dependency.Requirement == replacement.OldVersion {
+			return replacement.OldPath
+		}
+	}
+	return replacementIdentity(replacement)
+}
+
+func replacementIdentity(replacement Replacement) string {
+	if strings.TrimSpace(replacement.OldVersion) == "" {
+		return replacement.OldPath
+	}
+	return replacement.OldPath + "@" + replacement.OldVersion
+}
+
 func diffNotes(target analysis.AnalysisTarget, baseManifest, headManifest Manifest, baseSum, headSum SumFile, baseDependencies, headDependencies []analysis.LocalDependency) []analysis.Note {
 	notes := make([]analysis.Note, 0)
 	changed := changedDependencySet(baseDependencies, headDependencies)
+	hasMeaningfulDependencyChange := len(changed) > 0
 
 	for _, note := range replaceNotes(baseManifest, headManifest) {
 		notes = append(notes, note)
@@ -118,19 +136,19 @@ func diffNotes(target analysis.AnalysisTarget, baseManifest, headManifest Manife
 		}
 	}
 
-	if baseManifest.GoVersion != headManifest.GoVersion {
+	if hasMeaningfulDependencyChange && baseManifest.GoVersion != headManifest.GoVersion {
 		notes = append(notes, analysis.Note{
 			Code:   analysis.NoteGoDirectiveChanged,
 			Detail: fmt.Sprintf("go %s -> %s", displayValue(baseManifest.GoVersion), displayValue(headManifest.GoVersion)),
 		})
 	}
-	if baseManifest.Toolchain != headManifest.Toolchain {
+	if hasMeaningfulDependencyChange && baseManifest.Toolchain != headManifest.Toolchain {
 		notes = append(notes, analysis.Note{
 			Code:   analysis.NoteGoToolchainChanged,
 			Detail: fmt.Sprintf("toolchain %s -> %s", displayValue(baseManifest.Toolchain), displayValue(headManifest.Toolchain)),
 		})
 	}
-	if detail := checksumDetail(baseSum, headSum, target.LockfilePath); detail != "" {
+	if detail := checksumDetail(baseSum, headSum, target.LockfilePath); hasMeaningfulDependencyChange && detail != "" {
 		notes = append(notes, analysis.Note{
 			Code:   analysis.NoteGoChecksumChanged,
 			Detail: detail,
@@ -167,9 +185,9 @@ func replaceNotes(baseManifest, headManifest Manifest) []analysis.Note {
 
 		dependency := key
 		if afterOK {
-			dependency = after.OldPath
+			dependency = replacementIdentity(after)
 		} else if beforeOK {
-			dependency = before.OldPath
+			dependency = replacementIdentity(before)
 		}
 
 		detail := ""
@@ -200,7 +218,7 @@ func replaceNotes(baseManifest, headManifest Manifest) []analysis.Note {
 func replacementMap(replacements []Replacement) map[string]Replacement {
 	result := map[string]Replacement{}
 	for _, replacement := range replacements {
-		result[replacement.OldPath] = replacement
+		result[replacementIdentity(replacement)] = replacement
 	}
 	return result
 }
@@ -231,7 +249,12 @@ func changedDependencySet(baseDependencies, headDependencies []analysis.LocalDep
 	for key := range keys {
 		before, beforeOK := base[key]
 		after, afterOK := head[key]
-		if !beforeOK || !afterOK || before.Requirement != after.Requirement || before.Version != after.Version || before.Source != after.Source {
+		if !beforeOK ||
+			!afterOK ||
+			before.Requirement != after.Requirement ||
+			before.Version != after.Version ||
+			before.Source != after.Source ||
+			before.Scope != after.Scope {
 			changed[key] = struct{}{}
 		}
 	}

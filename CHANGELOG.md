@@ -4,6 +4,8 @@ All notable changes to `gh-dep-risk` will be documented in this file.
 
 ## Unreleased
 
+- Hardened Go modules local fallback edge cases around direct/indirect-only
+  changes, version-specific `replace` directives, and `go.sum` evidence notes.
 - Added Go modules local fallback for static `go.mod` `require`/`replace`
   changes, with `go.sum` checksum evidence notes only when Dependency Review is
   unavailable.

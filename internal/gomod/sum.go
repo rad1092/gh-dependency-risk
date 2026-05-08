@@ -8,6 +8,7 @@ import (
 func ParseSumFile(data []byte) SumFile {
 	var result SumFile
 	scanner := bufio.NewScanner(strings.NewReader(string(data)))
+	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
 	lineNumber := 0
 	for scanner.Scan() {
 		lineNumber++
@@ -29,6 +30,12 @@ func ParseSumFile(data []byte) SumFile {
 			Version: fields[1],
 			Hash:    fields[2],
 			Raw:     strings.Join(fields, " "),
+		})
+	}
+	if err := scanner.Err(); err != nil {
+		result.Unsupported = append(result.Unsupported, UnsupportedEntry{
+			Line:   lineNumber + 1,
+			Reason: "go.sum scanner error: " + err.Error(),
 		})
 	}
 	sortSumEntries(result.Entries)

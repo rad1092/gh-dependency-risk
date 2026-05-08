@@ -398,6 +398,10 @@ Notes:
   updates, direct versus `// indirect` requirements, and `replace` additions,
   removals, or changes; local `replace` targets are surfaced as non-registry
   source validation notes/actions
+- Version-specific replace-only entries may use a stable display identity
+  including the old version, for example `example.com/lib@v1.0.0`, because the
+  existing JSON schema has no separate replacement identity field and schema
+  churn is out of scope
 - Go modules local fallback may note pseudo-versions, `go` directive changes,
   `toolchain` directive changes, and `go.sum` checksum evidence changes only
   when the target also has a meaningful `require` or `replace` result

@@ -78,6 +78,25 @@ func TestRunPRGoModFallbackIndirectDependencyIsTransitive(t *testing.T) {
 	}
 }
 
+func TestRunPRGoModFallbackDirectToIndirectUpdate(t *testing.T) {
+	client := newGoModFakeGitHubClient(
+		"go.mod",
+		baseGoMod("example.com/app", "example.com/lib v1.0.0"),
+		baseGoMod("example.com/app", "example.com/lib v1.0.0 // indirect"),
+		"",
+		"",
+	)
+
+	stdout, _, err := runPRWithClient(t, client, RunPROptions{Format: "json"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	change := findChange(t, decodeJSONReport(t, stdout), "example.com/lib")
+	if change.ChangeType != analysis.ChangeUpdated || change.Scope != analysis.ScopeTransitive || change.Direct || change.Score != 0 {
+		t.Fatalf("expected direct-to-indirect update to be represented conservatively, got %#v", change)
+	}
+}
+
 func TestRunPRGoModFallbackReplaceOnlyIsReported(t *testing.T) {
 	client := newGoModFakeGitHubClient(
 		"go.mod",

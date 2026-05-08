@@ -36,11 +36,12 @@ go 1.22
 
 replace example.com/local => ../local/path
 replace example.com/remote => example.com/fork/remote v1.2.3
+replace example.com/versioned v1.0.0 => example.com/fork/versioned v1.0.1
 `))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(manifest.Replacements) != 2 {
+	if len(manifest.Replacements) != 3 {
 		t.Fatalf("expected replacements, got %#v", manifest.Replacements)
 	}
 	local := findReplacement(t, manifest.Replacements, "example.com/local")
@@ -50,6 +51,30 @@ replace example.com/remote => example.com/fork/remote v1.2.3
 	remote := findReplacement(t, manifest.Replacements, "example.com/remote")
 	if remote.Local || remote.NewPath != "example.com/fork/remote" || remote.NewVersion != "v1.2.3" {
 		t.Fatalf("expected remote replacement, got %#v", remote)
+	}
+	versioned := findReplacement(t, manifest.Replacements, "example.com/versioned", "v1.0.0")
+	if versioned.Local || versioned.NewPath != "example.com/fork/versioned" || versioned.NewVersion != "v1.0.1" {
+		t.Fatalf("expected version-specific replacement, got %#v", versioned)
+	}
+}
+
+func TestParseModFileMultipleVersionSpecificReplacements(t *testing.T) {
+	manifest, err := ParseModFile([]byte(`module example.com/app
+
+go 1.22
+
+replace (
+	example.com/lib v1.0.0 => example.com/fork/lib v1.0.1
+	example.com/lib v2.0.0 => example.com/fork/lib/v2 v2.0.1
+)
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	first := findReplacement(t, manifest.Replacements, "example.com/lib", "v1.0.0")
+	second := findReplacement(t, manifest.Replacements, "example.com/lib", "v2.0.0")
+	if first.NewVersion != "v1.0.1" || second.NewVersion != "v2.0.1" {
+		t.Fatalf("expected distinct old-version replacements, got %#v", manifest.Replacements)
 	}
 }
 
@@ -73,13 +98,17 @@ func assertRequirement(t *testing.T, requirements []Requirement, path, version s
 	t.Fatalf("expected requirement %s, got %#v", path, requirements)
 }
 
-func findReplacement(t *testing.T, replacements []Replacement, path string) Replacement {
+func findReplacement(t *testing.T, replacements []Replacement, path string, oldVersion ...string) Replacement {
 	t.Helper()
+	version := ""
+	if len(oldVersion) > 0 {
+		version = oldVersion[0]
+	}
 	for _, replacement := range replacements {
-		if replacement.OldPath == path {
+		if replacement.OldPath == path && replacement.OldVersion == version {
 			return replacement
 		}
 	}
-	t.Fatalf("expected replacement %s, got %#v", path, replacements)
+	t.Fatalf("expected replacement %s@%s, got %#v", path, version, replacements)
 	return Replacement{}
 }

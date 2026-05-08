@@ -115,7 +115,10 @@ func localDependencyNames(base, head map[string]LocalDependency) []string {
 }
 
 func localDependencyChanged(before, after LocalDependency) bool {
-	return before.Requirement != after.Requirement || before.Version != after.Version || before.Source != after.Source
+	return before.Requirement != after.Requirement ||
+		before.Version != after.Version ||
+		before.Source != after.Source ||
+		normalizeLocalScope(before.Scope) != normalizeLocalScope(after.Scope)
 }
 
 func localDependencyChange(target AnalysisTarget, before LocalDependency, beforeOK bool, after LocalDependency, afterOK bool) DependencyChange {
@@ -139,9 +142,6 @@ func localDependencyChange(target AnalysisTarget, before LocalDependency, before
 		change.ChangeType = ChangeUpdated
 		change.Scope = normalizeLocalScope(after.Scope)
 		change.Direct = localDependencyDirect(after)
-		if !change.Direct {
-			change.Direct = localDependencyDirect(before)
-		}
 	}
 	if beforeOK {
 		change.FromRequirement = before.Requirement

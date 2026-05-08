@@ -80,6 +80,27 @@ func TestAnalyzeLocalTransitiveScopeIsNotDirectAndDoesNotScoreAsDirect(t *testin
 	}
 }
 
+func TestAnalyzeLocalScopeOnlyUpdateChangesDirectness(t *testing.T) {
+	result := AnalyzeLocalDirectDependencies(LocalInput{
+		Target:                    pythonRequirementsTarget(),
+		DependencyReviewAvailable: false,
+		BaseDependencies: []LocalDependency{
+			{Name: "example.com/lib", Requirement: "v1.0.0", Version: "v1.0.0", Scope: ScopeRuntime},
+		},
+		HeadDependencies: []LocalDependency{
+			{Name: "example.com/lib", Requirement: "v1.0.0", Version: "v1.0.0", Scope: ScopeTransitive},
+		},
+	})
+
+	if len(result.ChangedDependencies) != 1 {
+		t.Fatalf("expected scope-only update to be reported, got %#v", result.ChangedDependencies)
+	}
+	change := result.ChangedDependencies[0]
+	if change.ChangeType != ChangeUpdated || change.Scope != ScopeTransitive || change.Direct || change.Score != 0 {
+		t.Fatalf("expected direct-to-transitive scope update to be conservative, got %#v", change)
+	}
+}
+
 func TestAnalyzeLocalNonRegistrySourceIsInformational(t *testing.T) {
 	withoutSource := AnalyzeLocalDirectDependencies(LocalInput{
 		Target:                    pythonRequirementsTarget(),
