@@ -26,14 +26,14 @@ fallback. An asciinema-compatible recording is also checked in at
   - yarn: `package.json`, `yarn.lock` (narrow Yarn Classic / node_modules fallback only)
   - Python: `requirements.txt`, PEP 621 `pyproject.toml`, and Poetry
     `pyproject.toml` direct dependency declarations; Poetry may use
-    `poetry.lock` to enrich direct resolved versions, with no resolver or full
-    transitive analysis
+    `poetry.lock` and PEP 621 may use `uv.lock` to enrich direct resolved
+    versions and source metadata, with no resolver or full transitive analysis
 - one Go binary
 - dependency review API first, local fallback only when dependency review is
   unavailable
 - no server, webhook receiver, GitHub App, DB, queue, dashboard, bun, or
   broad non-JS local fallback beyond the narrow Python direct-declaration and
-  Poetry direct lockfile fallback in this release
+  direct lockfile-enrichment fallback in this release
 
 Dependency Review ecosystems surfaced in this release when GitHub provides
 them:
@@ -287,7 +287,7 @@ The score model stays heuristic, deterministic, and intentionally auditable.
 | pnpm | Dependency Review data is used when available. | Local fallback analyzes `package.json`, `pnpm-lock.yaml`, and `pnpm-workspace.yaml` discovery. |
 | Yarn Classic | Dependency Review data is used when available. | Local fallback analyzes `package.json` and classic `yarn.lock`. |
 | Yarn Berry / PnP | Dependency Review data may be surfaced when GitHub provides it. | Local fallback fails honestly when the lockfile cannot be analyzed faithfully. |
-| Python `requirements.txt` / PEP 621 `pyproject.toml` / Poetry `pyproject.toml` + `poetry.lock` | Dependency Review data is used when available. | Local fallback compares direct dependency declarations and can use `poetry.lock` to enrich direct resolved versions. No resolver, broad lockfile support, or full transitive analysis. |
+| Python `requirements.txt` / PEP 621 `pyproject.toml` + optional `uv.lock` / Poetry `pyproject.toml` + optional `poetry.lock` | Dependency Review data is used when available. | Local fallback compares direct dependency declarations and can use `uv.lock` or `poetry.lock` to enrich matching direct resolved versions and source metadata. No resolver, broad lockfile support, or full transitive analysis. |
 | Cargo, Composer, Go modules, Maven, RubyGems, SwiftPM | Dependency Review data may be surfaced when GitHub provides it. | No local fallback in this release. |
 
 ## Behavior
@@ -312,7 +312,8 @@ Supported target shapes:
   `package-lock.json`, `pnpm-lock.yaml`, or `yarn.lock`
 - Python `requirements.txt` direct dependency declarations
 - PEP 621 `pyproject.toml` direct dependencies from `[project].dependencies`
-  and `[project.optional-dependencies]`
+  and `[project.optional-dependencies]`, with optional `uv.lock` direct
+  resolved-version and source enrichment
 - Poetry `pyproject.toml` direct dependencies from `[tool.poetry.dependencies]`,
   `[tool.poetry.dev-dependencies]`, and `[tool.poetry.group.<name>.dependencies]`,
   with optional `poetry.lock` direct resolved-version enrichment
@@ -360,11 +361,22 @@ Notes:
   a clear actionable error instead of pretending to analyze it
 - Python local fallback is declaration-oriented: unsupported requirement
   includes, constraints, editable installs, unsupported Poetry dependency
-  shapes, dependency groups outside the Poetry direct subset, and `uv.lock` are
-  not resolved in this phase
+  shapes, and dependency groups outside the Poetry direct subset are not
+  resolved in this phase
+- `uv.lock` support is limited to enriching PEP 621 direct dependencies with
+  matching direct resolved versions and recognized source metadata; registry,
+  virtual, and workspace sources do not create non-registry source notes
+- unknown `uv.lock` source shapes are reported as unsupported dependency
+  entries rather than guessed
 - `poetry.lock` support is limited to enriching direct Poetry dependencies with
   resolved versions and source metadata; it does not reconstruct a full
   transitive dependency graph
+- if a direct PEP 621 dependency declaration is unchanged but the matching
+  `uv.lock` resolved version or source changes, local fallback reports that
+  direct dependency as updated
+- `uv.lock` package changes without a matching direct dependency declaration in
+  `pyproject.toml` are treated as transitive-only and do not create report
+  changes
 - if a direct Poetry dependency declaration is unchanged but the matching
   `poetry.lock` resolved version changes, local fallback reports that direct
   dependency as updated

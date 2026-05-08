@@ -405,12 +405,35 @@ func loadPythonLocalInput(ctx context.Context, cache *repoDataCache, baseSHA, he
 		return analysis.LocalInput{}, err
 	}
 
+	unsupported := convertPythonUnsupported(target.ManifestPath, baseResult.Unsupported, headResult.Unsupported)
+	if target.PackageManager == "pyproject" && strings.TrimSpace(target.LockfilePath) != "" {
+		baseLockData, err := cache.file(ctx, baseSHA, target.LockfilePath)
+		if err != nil {
+			return analysis.LocalInput{}, err
+		}
+		headLockData, err := cache.file(ctx, headSHA, target.LockfilePath)
+		if err != nil {
+			return analysis.LocalInput{}, err
+		}
+		baseLockfile, err := pythondeps.ParseUvLockfile(baseLockData)
+		if err != nil {
+			return analysis.LocalInput{}, err
+		}
+		headLockfile, err := pythondeps.ParseUvLockfile(headLockData)
+		if err != nil {
+			return analysis.LocalInput{}, err
+		}
+		baseResult = pythondeps.ApplyUvLockfile(baseResult, baseLockfile)
+		headResult = pythondeps.ApplyUvLockfile(headResult, headLockfile)
+		unsupported = append(unsupported, convertPythonUnsupported(target.LockfilePath, baseLockfile.Unsupported, headLockfile.Unsupported)...)
+	}
+
 	return analysis.LocalInput{
 		Target:                    target,
 		DependencyReviewAvailable: false,
 		BaseDependencies:          convertPythonDependencies(baseResult.Dependencies),
 		HeadDependencies:          convertPythonDependencies(headResult.Dependencies),
-		Unsupported:               convertPythonUnsupported(target.ManifestPath, baseResult.Unsupported, headResult.Unsupported),
+		Unsupported:               unsupported,
 	}, nil
 }
 

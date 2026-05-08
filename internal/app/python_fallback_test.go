@@ -498,6 +498,322 @@ func TestRunPRMixedPEP621AndPoetryPrefersPEP621Target(t *testing.T) {
 	}
 }
 
+func TestRunPRUvPyProjectListTargetsShowsLockfile(t *testing.T) {
+	client := newUvPyProjectFakeGitHubClient(
+		pep621PyProject([]string{}),
+		pep621PyProject([]string{"requests>=2.32"}),
+		"",
+		uvLock(map[string]string{"requests": "2.32.3"}),
+	)
+
+	stdout, _, err := runPRWithClient(t, client, RunPROptions{ListTargets: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, expected := range []string{
+		"root [root, ecosystem=pip, manager=pyproject]",
+		"manifest: pyproject.toml",
+		"lockfile: uv.lock",
+	} {
+		if !strings.Contains(stdout, expected) {
+			t.Fatalf("expected uv target listing to contain %q, got %q", expected, stdout)
+		}
+	}
+	if strings.Contains(stdout, "manager=uv") {
+		t.Fatalf("did not expect duplicate uv manager target, got %q", stdout)
+	}
+}
+
+func TestRunPRUvUsesDependencyReviewWhenAvailable(t *testing.T) {
+	client := newUvPyProjectFakeGitHubClient(
+		pep621PyProject([]string{}),
+		pep621PyProject([]string{"requests>=2.32"}),
+		"",
+		uvLock(map[string]string{"requests": "2.32.3"}),
+	)
+	client.compareErr = nil
+	client.compareChanges = []ghclient.DependencyReviewChange{
+		{Name: "requests", Manifest: "pyproject.toml", Ecosystem: "pip", ChangeType: "added", Version: "2.32.3"},
+	}
+
+	stdout, _, err := runPRWithClient(t, client, RunPROptions{Format: "json"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload := decodeJSONReport(t, stdout)
+	if !payload.DependencyReviewAvailable {
+		t.Fatalf("expected dependency review primary path, got %#v", payload)
+	}
+	for _, key := range client.getFileKeys {
+		if strings.Contains(key, "uv.lock@") {
+			t.Fatalf("expected dependency review path not to load uv.lock, got file calls %#v", client.getFileKeys)
+		}
+	}
+	_ = findChange(t, payload, "requests")
+}
+
+func TestRunPRUvFallbackAddedUsesLockVersion(t *testing.T) {
+	client := newUvPyProjectFakeGitHubClient(
+		pep621PyProject([]string{}),
+		pep621PyProject([]string{"requests>=2.32"}),
+		"",
+		uvLock(map[string]string{"requests": "2.32.3"}),
+	)
+
+	stdout, _, err := runPRWithClient(t, client, RunPROptions{Format: "json", Paths: []string{"pyproject.toml"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	change := findChange(t, decodeJSONReport(t, stdout), "requests")
+	if change.ChangeType != analysis.ChangeAdded || change.ToRequirement != ">=2.32" || change.ToVersion != "2.32.3" || change.Scope != analysis.ScopeRuntime {
+		t.Fatalf("unexpected uv added change: %#v", change)
+	}
+}
+
+func TestRunPRUvFallbackDeclarationOnlyWithoutLockfile(t *testing.T) {
+	client := newUvPyProjectFakeGitHubClient(
+		pep621PyProject([]string{}),
+		pep621PyProject([]string{"requests>=2.32"}),
+		"",
+		"",
+	)
+
+	stdout, _, err := runPRWithClient(t, client, RunPROptions{Format: "json", Paths: []string{"pyproject.toml"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload := decodeJSONReport(t, stdout)
+	if payload.Targets[0].Target.LockfilePath != "" {
+		t.Fatalf("did not expect uv.lock target without lockfile, got %#v", payload.Targets)
+	}
+	change := findChange(t, payload, "requests")
+	if change.ChangeType != analysis.ChangeAdded || change.ToRequirement != ">=2.32" || change.ToVersion != "" {
+		t.Fatalf("unexpected declaration-only pyproject change: %#v", change)
+	}
+}
+
+func TestRunPRUvFallbackUpdatedUsesLockVersion(t *testing.T) {
+	client := newUvPyProjectFakeGitHubClient(
+		pep621PyProject([]string{"django>=4.2"}),
+		pep621PyProject([]string{"django>=5.0"}),
+		uvLock(map[string]string{"django": "4.2.11"}),
+		uvLock(map[string]string{"django": "5.0.1"}),
+	)
+
+	stdout, _, err := runPRWithClient(t, client, RunPROptions{Format: "json"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	change := findChange(t, decodeJSONReport(t, stdout), "django")
+	if change.ChangeType != analysis.ChangeUpdated || change.FromVersion != "4.2.11" || change.ToVersion != "5.0.1" {
+		t.Fatalf("unexpected uv updated change: %#v", change)
+	}
+	if !containsString(change.RiskDrivers, analysis.DriverMajorVersionBump) {
+		t.Fatalf("expected major version driver, got %#v", change.RiskDrivers)
+	}
+}
+
+func TestRunPRUvFallbackRemovedUsesLockVersion(t *testing.T) {
+	client := newUvPyProjectFakeGitHubClient(
+		pep621PyProject([]string{"flask>=3.0"}),
+		pep621PyProject([]string{}),
+		uvLock(map[string]string{"flask": "3.0.3"}),
+		"",
+	)
+
+	stdout, _, err := runPRWithClient(t, client, RunPROptions{Format: "json"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	change := findChange(t, decodeJSONReport(t, stdout), "flask")
+	if change.ChangeType != analysis.ChangeRemoved || change.FromVersion != "3.0.3" || change.ToVersion != "" {
+		t.Fatalf("unexpected uv removed change: %#v", change)
+	}
+}
+
+func TestRunPRUvLockfileOnlyDirectResolvedVersionUpdate(t *testing.T) {
+	client := newUvLockOnlyFakeGitHubClient(
+		pep621PyProject([]string{"requests>=2.32"}),
+		uvLock(map[string]string{"requests": "2.32.2"}),
+		uvLock(map[string]string{"requests": "2.32.3"}),
+	)
+
+	stdout, _, err := runPRWithClient(t, client, RunPROptions{Format: "json"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	change := findChange(t, decodeJSONReport(t, stdout), "requests")
+	if change.ChangeType != analysis.ChangeUpdated || change.FromRequirement != ">=2.32" || change.ToRequirement != ">=2.32" || change.FromVersion != "2.32.2" || change.ToVersion != "2.32.3" {
+		t.Fatalf("expected direct uv.lock resolved version update, got %#v", change)
+	}
+}
+
+func TestRunPRUvLockfileOnlyTransitiveChangeIgnored(t *testing.T) {
+	client := newUvLockOnlyFakeGitHubClient(
+		pep621PyProject([]string{"requests>=2.32"}),
+		uvLock(map[string]string{"requests": "2.32.3", "urllib3": "2.2.1"}),
+		uvLock(map[string]string{"requests": "2.32.3", "urllib3": "2.2.2"}),
+	)
+
+	_, _, err := runPRWithClient(t, client, RunPROptions{Format: "json"})
+	assertExitCode(t, err, 2)
+}
+
+func TestRunPRUvLockfileOnlyDirectSourceUpdate(t *testing.T) {
+	client := newUvLockOnlyFakeGitHubClient(
+		pep621PyProject([]string{"git-lib>=0.1"}),
+		uvLockWithSource("git-lib", "0.1.0", `{ git = "https://github.com/example/from-base.git", rev = "abc123" }`),
+		uvLockWithSource("git-lib", "0.1.0", `{ git = "https://github.com/example/from-head.git", rev = "def456" }`),
+	)
+
+	stdout, _, err := runPRWithClient(t, client, RunPROptions{Format: "json"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload := decodeJSONReport(t, stdout)
+	change := findChange(t, payload, "git-lib")
+	if change.ChangeType != analysis.ChangeUpdated || change.Resolved != "git:https://github.com/example/from-head.git#rev=def456" {
+		t.Fatalf("expected direct uv.lock source update, got %#v", change)
+	}
+	if !hasNote(payload.Notes, analysis.NoteNonRegistrySource) {
+		t.Fatalf("expected non-registry note for updated source, got %#v", payload.Notes)
+	}
+}
+
+func TestRunPRUvFallbackNonRegistrySourceUsesLockfileWhenPyProjectHasNoSource(t *testing.T) {
+	client := newUvPyProjectFakeGitHubClient(
+		pep621PyProject([]string{}),
+		pep621PyProject([]string{"git-lib>=0.1"}),
+		"",
+		uvLockWithSource("git-lib", "0.1.0", `{ git = "https://github.com/example/from-lock.git", rev = "abc123" }`),
+	)
+
+	stdout, _, err := runPRWithClient(t, client, RunPROptions{Format: "json"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload := decodeJSONReport(t, stdout)
+	change := findChange(t, payload, "git-lib")
+	if change.Resolved != "git:https://github.com/example/from-lock.git#rev=abc123" {
+		t.Fatalf("expected uv.lock source to enrich missing pyproject source, got %#v", change)
+	}
+	note := findNote(t, payload.Notes, analysis.NoteNonRegistrySource)
+	if note.Dependency != "git-lib" || note.Detail != change.Resolved {
+		t.Fatalf("expected non-registry note for uv.lock source, got %#v", payload.Notes)
+	}
+	if !containsString(payload.RecommendedActions, analysis.ActionValidateSources) {
+		t.Fatalf("expected validate source recommendation, got %#v", payload.RecommendedActions)
+	}
+}
+
+func TestRunPRUvFallbackPyProjectSourceWinsOverLockfile(t *testing.T) {
+	client := newUvPyProjectFakeGitHubClient(
+		pep621PyProject([]string{}),
+		pep621PyProject([]string{"git-lib @ https://github.com/example/from-pyproject.git"}),
+		"",
+		uvLockWithSource("git-lib", "0.1.0", `{ git = "https://github.com/example/from-lock.git", rev = "abc123" }`),
+	)
+
+	stdout, _, err := runPRWithClient(t, client, RunPROptions{Format: "json"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload := decodeJSONReport(t, stdout)
+	change := findChange(t, payload, "git-lib")
+	if change.Resolved != "https://github.com/example/from-pyproject.git" {
+		t.Fatalf("expected pyproject source to win, got %#v", change)
+	}
+	note := findNote(t, payload.Notes, analysis.NoteNonRegistrySource)
+	if note.Dependency != "git-lib" || note.Detail != change.Resolved {
+		t.Fatalf("expected non-registry note for pyproject source, got %#v", payload.Notes)
+	}
+}
+
+func TestRunPRUvRegistryVirtualWorkspaceSourcesDoNotCreateNonRegistryNote(t *testing.T) {
+	client := newUvPyProjectFakeGitHubClient(
+		pep621PyProject([]string{}),
+		pep621PyProject([]string{"requests>=2.32"}),
+		"",
+		uvLockWithSource("requests", "2.32.3", `{ registry = "https://pypi.org/simple" }`)+
+			uvLockWithSource("project", "0.1.0", `{ virtual = "." }`)+
+			uvLockWithSource("workspace-lib", "0.1.0", `{ workspace = true }`),
+	)
+
+	stdout, _, err := runPRWithClient(t, client, RunPROptions{Format: "json"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload := decodeJSONReport(t, stdout)
+	_ = findChange(t, payload, "requests")
+	if hasNote(payload.Notes, analysis.NoteNonRegistrySource) {
+		t.Fatalf("did not expect non-registry note for registry/virtual/workspace sources, got %#v", payload.Notes)
+	}
+}
+
+func TestRunPRUvUnsupportedOnlyKeepsExitCode2(t *testing.T) {
+	client := newUvLockOnlyFakeGitHubClient(
+		pep621PyProject([]string{"requests>=2.32"}),
+		uvLock(map[string]string{"requests": "2.32.3"}),
+		uvLockWithSource("requests", "2.32.3", `{ unknown = "value" }`),
+	)
+
+	_, stderr, err := runPRWithClient(t, client, RunPROptions{Format: "json"})
+	assertExitCode(t, err, 2)
+	if !strings.Contains(stderr, "unsupported dependency entries were present") {
+		t.Fatalf("expected unsupported warning on stderr, got %q", stderr)
+	}
+}
+
+func TestRunPRUvSupportedAndUnsupportedIncludesNote(t *testing.T) {
+	client := newUvPyProjectFakeGitHubClient(
+		pep621PyProject([]string{}),
+		pep621PyProject([]string{"requests>=2.32"}),
+		"",
+		uvLock(map[string]string{"requests": "2.32.3"})+`
+[[package]]
+version = "1.0.0"
+`,
+	)
+
+	stdout, _, err := runPRWithClient(t, client, RunPROptions{Format: "json"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload := decodeJSONReport(t, stdout)
+	_ = findChange(t, payload, "requests")
+	if !hasNote(payload.Notes, analysis.NoteUnsupportedDependency) {
+		t.Fatalf("expected unsupported note, got %#v", payload.Notes)
+	}
+}
+
+func TestRunPRUvNestedTargetAndPathFiltering(t *testing.T) {
+	client := newNestedUvFakeGitHubClient()
+
+	stdout, _, err := runPRWithClient(t, client, RunPROptions{ListTargets: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, expected := range []string{
+		"services/api [standalone, ecosystem=pip, manager=pyproject]",
+		"manifest: services/api/pyproject.toml",
+		"lockfile: services/api/uv.lock",
+	} {
+		if !strings.Contains(stdout, expected) {
+			t.Fatalf("expected nested uv target listing to contain %q, got %q", expected, stdout)
+		}
+	}
+
+	stdout, _, err = runPRWithClient(t, client, RunPROptions{Format: "json", Paths: []string{"services/api/pyproject.toml"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload := decodeJSONReport(t, stdout)
+	if len(payload.Targets) != 1 || payload.Targets[0].Target.ManifestPath != "services/api/pyproject.toml" || payload.Targets[0].Target.LockfilePath != "services/api/uv.lock" {
+		t.Fatalf("expected nested uv target only, got %#v", payload.Targets)
+	}
+	_ = findChange(t, payload, "fastapi")
+}
+
 func newPythonRequirementsFakeGitHubClient(base, head string) *fakeGitHubClient {
 	client := newPythonBaseFakeGitHubClient()
 	client.files = []ghclient.PullRequestFile{{Filename: "requirements.txt", Status: "modified"}}
@@ -626,6 +942,94 @@ flask = "^3.0"
 	client.filesByKey[fileKey("poetry.lock", "base-sha")] = []byte("")
 	client.filesByKey[fileKey("poetry.lock", "head-sha")] = []byte(poetryLock(map[string]string{"flask": "3.0.3"}, nil))
 	return client
+}
+
+func newUvPyProjectFakeGitHubClient(basePyProject, headPyProject, baseLock, headLock string) *fakeGitHubClient {
+	client := newPythonBaseFakeGitHubClient()
+	client.files = []ghclient.PullRequestFile{{Filename: "pyproject.toml", Status: "modified"}}
+	client.repositoryFilesByRef["base-sha"] = []string{"pyproject.toml"}
+	client.repositoryFilesByRef["head-sha"] = []string{"pyproject.toml"}
+	client.filesByKey[fileKey("pyproject.toml", "base-sha")] = []byte(basePyProject)
+	client.filesByKey[fileKey("pyproject.toml", "head-sha")] = []byte(headPyProject)
+	if baseLock != "" || headLock != "" {
+		client.files = append(client.files, ghclient.PullRequestFile{Filename: "uv.lock", Status: "modified"})
+		if baseLock != "" {
+			client.repositoryFilesByRef["base-sha"] = append(client.repositoryFilesByRef["base-sha"], "uv.lock")
+			client.filesByKey[fileKey("uv.lock", "base-sha")] = []byte(baseLock)
+		}
+		if headLock != "" {
+			client.repositoryFilesByRef["head-sha"] = append(client.repositoryFilesByRef["head-sha"], "uv.lock")
+			client.filesByKey[fileKey("uv.lock", "head-sha")] = []byte(headLock)
+		}
+	}
+	return client
+}
+
+func newUvLockOnlyFakeGitHubClient(pyProject, baseLock, headLock string) *fakeGitHubClient {
+	client := newPythonBaseFakeGitHubClient()
+	client.files = []ghclient.PullRequestFile{{Filename: "uv.lock", Status: "modified"}}
+	client.repositoryFilesByRef["base-sha"] = []string{"pyproject.toml", "uv.lock"}
+	client.repositoryFilesByRef["head-sha"] = []string{"pyproject.toml", "uv.lock"}
+	client.filesByKey[fileKey("pyproject.toml", "base-sha")] = []byte(pyProject)
+	client.filesByKey[fileKey("pyproject.toml", "head-sha")] = []byte(pyProject)
+	client.filesByKey[fileKey("uv.lock", "base-sha")] = []byte(baseLock)
+	client.filesByKey[fileKey("uv.lock", "head-sha")] = []byte(headLock)
+	return client
+}
+
+func newNestedUvFakeGitHubClient() *fakeGitHubClient {
+	client := newPythonBaseFakeGitHubClient()
+	client.files = []ghclient.PullRequestFile{
+		{Filename: "services/api/pyproject.toml", Status: "modified"},
+		{Filename: "services/api/uv.lock", Status: "modified"},
+	}
+	client.repositoryFilesByRef["base-sha"] = []string{"services/api/pyproject.toml", "services/api/uv.lock"}
+	client.repositoryFilesByRef["head-sha"] = []string{"services/api/pyproject.toml", "services/api/uv.lock"}
+	client.filesByKey[fileKey("services/api/pyproject.toml", "base-sha")] = []byte(pep621PyProject([]string{}))
+	client.filesByKey[fileKey("services/api/pyproject.toml", "head-sha")] = []byte(pep621PyProject([]string{"fastapi>=0.115"}))
+	client.filesByKey[fileKey("services/api/uv.lock", "base-sha")] = []byte("")
+	client.filesByKey[fileKey("services/api/uv.lock", "head-sha")] = []byte(uvLock(map[string]string{"fastapi": "0.115.0"}))
+	return client
+}
+
+func pep621PyProject(dependencies []string) string {
+	var b strings.Builder
+	b.WriteString("[project]\nname = \"demo\"\nversion = \"0.1.0\"\ndependencies = [")
+	for index, dependency := range dependencies {
+		if index > 0 {
+			b.WriteString(", ")
+		}
+		encoded, _ := json.Marshal(dependency)
+		b.Write(encoded)
+	}
+	b.WriteString("]\n")
+	return b.String()
+}
+
+func uvLock(packages map[string]string) string {
+	var b strings.Builder
+	for _, name := range sortedMapKeys(packages) {
+		b.WriteString("[[package]]\n")
+		b.WriteString("name = \"")
+		b.WriteString(name)
+		b.WriteString("\"\nversion = \"")
+		b.WriteString(packages[name])
+		b.WriteString("\"\n\n")
+	}
+	return b.String()
+}
+
+func uvLockWithSource(name, version, source string) string {
+	var b strings.Builder
+	b.WriteString("[[package]]\n")
+	b.WriteString("name = \"")
+	b.WriteString(name)
+	b.WriteString("\"\nversion = \"")
+	b.WriteString(version)
+	b.WriteString("\"\nsource = ")
+	b.WriteString(source)
+	b.WriteString("\n\n")
+	return b.String()
 }
 
 func poetryPyProject(dependencies map[string]string, tableDependencies map[string]string) string {

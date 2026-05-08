@@ -332,6 +332,7 @@ func discoverJSTargets(ctx context.Context, cache *repoDataCache, baseRef, headR
 func discoverAPIOnlyTargets(ctx context.Context, cache *repoDataCache, baseRef, headRef string, files []string) ([]discoveredTarget, error) {
 	grouped := map[string][]analysis.AnalysisTarget{}
 	poetryLockfiles := pathSet(filterPaths(files, "poetry.lock"))
+	uvLockfiles := pathSet(filterPaths(files, "uv.lock"))
 	for _, filePath := range files {
 		cleaned := normalizeRepoPath(filePath)
 		base := path.Base(cleaned)
@@ -380,6 +381,12 @@ func discoverAPIOnlyTargets(ctx context.Context, cache *repoDataCache, baseRef, 
 		if manager == review.PackageManagerPoetry {
 			candidate := poetryLockfilePathForDir(manifestDir(cleaned))
 			if _, ok := poetryLockfiles[candidate]; ok {
+				lockfilePath = candidate
+			}
+		}
+		if manager == review.PackageManagerPyProject {
+			candidate := uvLockfilePathForDir(manifestDir(cleaned))
+			if _, ok := uvLockfiles[candidate]; ok {
 				lockfilePath = candidate
 			}
 		}
@@ -759,6 +766,14 @@ func poetryLockfilePathForDir(dir string) string {
 		return "poetry.lock"
 	}
 	return cleaned + "/poetry.lock"
+}
+
+func uvLockfilePathForDir(dir string) string {
+	cleaned := normalizeRepoPath(dir)
+	if cleaned == "" {
+		return "uv.lock"
+	}
+	return cleaned + "/uv.lock"
 }
 
 func normalizeRepoPath(value string) string {

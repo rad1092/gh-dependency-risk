@@ -4,6 +4,9 @@ All notable changes to `gh-dep-risk` will be documented in this file.
 
 ## Unreleased
 
+- Added PEP 621 `pyproject.toml` local fallback enrichment from matching
+  direct `uv.lock` resolved versions and source metadata when Dependency Review
+  is unavailable.
 - Hardened Poetry local fallback edge cases around direct `poetry.lock` resolved
   version updates and transitive-only lockfile package changes.
 - Added Poetry `pyproject.toml` local fallback with optional `poetry.lock`
