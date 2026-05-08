@@ -4,6 +4,8 @@ All notable changes to `gh-dep-risk` will be documented in this file.
 
 ## Unreleased
 
+- Hardened Bun local fallback edge cases around JSONC parsing, direct lockfile
+  matching, binary lockfile handling, checksum gating, and source protocols.
 - Added narrow Bun local fallback for direct `package.json` declarations
   matched to text `bun.lock` entries when Dependency Review is unavailable.
 - Hardened Yarn Berry local fallback edge cases around ambiguous direct

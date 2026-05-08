@@ -106,10 +106,10 @@ func parseBunPackageEntry(key string, data json.RawMessage) (BunEntry, []BunUnsu
 	var array []json.RawMessage
 	if err := json.Unmarshal(data, &array); err == nil {
 		if len(array) == 0 {
-			return entry, []BunUnsupportedEntry{{Descriptor: key, Reason: "bun.lock package array is empty"}}
+			return BunEntry{}, []BunUnsupportedEntry{{Descriptor: key, Reason: "bun.lock package array is empty"}}
 		}
 		if err := json.Unmarshal(array[0], &entry.Descriptor); err != nil || strings.TrimSpace(entry.Descriptor) == "" {
-			return entry, []BunUnsupportedEntry{{Descriptor: key, Reason: "bun.lock package descriptor must be a string"}}
+			return BunEntry{}, []BunUnsupportedEntry{{Descriptor: key, Reason: "bun.lock package descriptor must be a string"}}
 		}
 		if parsed := parseBunDescriptor(entry.Descriptor); parsed.Name != "" {
 			if entry.Name == "" || strings.Contains(key, "@") {
@@ -162,9 +162,11 @@ func parseBunPackageEntry(key string, data json.RawMessage) (BunEntry, []BunUnsu
 	}
 	if deps, ok := stringMapField(object, "dependencies"); ok {
 		entry.Dependencies = deps
+	} else if _, ok := object["dependencies"]; ok {
+		unsupported = append(unsupported, BunUnsupportedEntry{Descriptor: key, Reason: "dependencies must be a string mapping"})
 	}
 	finalizeBunEntry(&entry)
-	return entry, nil
+	return entry, unsupported
 }
 
 func parseBunPackageString(entry *BunEntry, item json.RawMessage, index int) bool {

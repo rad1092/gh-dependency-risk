@@ -1,6 +1,9 @@
 package npm
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestParseBunLockfileParsesDirectEntries(t *testing.T) {
 	lockfile, err := ParseBunLockfile([]byte(`{
@@ -55,6 +58,43 @@ func TestParseBunLockfileParsesDirectEntries(t *testing.T) {
 	}
 }
 
+func TestParseBunLockfileJSONCRobustness(t *testing.T) {
+	lockfile, err := ParseBunLockfile([]byte(`{
+  // line comment outside strings
+  "lockfileVersion": 1,
+  /* block comment outside strings */
+  "packages": {
+    "url-lib": [
+      "url-lib@https://example.com/pkg//artifact.tgz?literal=/*not-comment*/",
+      "https://example.com/pkg//artifact.tgz?literal=/*not-comment*/",
+    ],
+    "escaped-lib": [
+      "escaped-lib@file:C:\\tmp\\\"quoted\".tgz",
+      "file:C:\\tmp\\\"quoted\".tgz",
+    ],
+  },
+}`))
+	if err != nil {
+		t.Fatalf("parse bun.lock: %v", err)
+	}
+
+	urlEntry, ok, unsupported := lockfile.ResolveDirectEntry("url-lib", "https://example.com/pkg//artifact.tgz?literal=/*not-comment*/")
+	if !ok || len(unsupported) != 0 {
+		t.Fatalf("expected URL entry to resolve, got entry=%#v ok=%v unsupported=%#v", urlEntry, ok, unsupported)
+	}
+	if source := urlEntry.SourceForRequirement("https://example.com/pkg//artifact.tgz?literal=/*not-comment*/"); source != "https://example.com/pkg//artifact.tgz?literal=/*not-comment*/" {
+		t.Fatalf("expected URL string content to be preserved, got %q", source)
+	}
+
+	escapedEntry, ok, unsupported := lockfile.ResolveDirectEntry("escaped-lib", `file:C:\tmp\"quoted".tgz`)
+	if !ok || len(unsupported) != 0 {
+		t.Fatalf("expected escaped entry to resolve, got entry=%#v ok=%v unsupported=%#v", escapedEntry, ok, unsupported)
+	}
+	if source := escapedEntry.SourceForRequirement(`file:C:\tmp\"quoted".tgz`); !strings.Contains(source, `"quoted"`) {
+		t.Fatalf("expected escaped quote/backslash string content to be preserved, got %q", source)
+	}
+}
+
 func TestParseBunLockfileObjectEntryAndRegistrySource(t *testing.T) {
 	lockfile, err := ParseBunLockfile([]byte(`{
   "lockfileVersion": 1,
@@ -76,6 +116,22 @@ func TestParseBunLockfileObjectEntryAndRegistrySource(t *testing.T) {
 	}
 	if source := entry.SourceForRequirement("^2.0.0"); source != "" {
 		t.Fatalf("expected default registry URL not to become non-registry source, got %q", source)
+	}
+}
+
+func TestBunResolveDirectEntrySingleSameNameFallback(t *testing.T) {
+	lockfile, err := ParseBunLockfile([]byte(`{
+  "lockfileVersion": 1,
+  "packages": {
+    "left-pad@npm:^1.0.0": ["left-pad@1.0.1", ""]
+  }
+}`))
+	if err != nil {
+		t.Fatalf("parse bun.lock: %v", err)
+	}
+	entry, ok, unsupported := lockfile.ResolveDirectEntry("left-pad", "^2.0.0")
+	if !ok || entry.Version != "1.0.1" || len(unsupported) != 0 {
+		t.Fatalf("expected single same-name fallback, got entry=%#v ok=%v unsupported=%#v", entry, ok, unsupported)
 	}
 }
 
@@ -121,23 +177,34 @@ func TestParseBunLockfileUnsupportedShapeAndDeterministicSort(t *testing.T) {
   "lockfileVersion": 1,
   "packages": {
     "z-lib": ["z-lib@1.0.0", ""],
-    "bad": "not an entry",
+    "bad-z": "not an entry",
+    "bad-a": [],
+    "bad-m": [42],
+    "bad-deps": { "descriptor": "bad-deps@1.0.0", "dependencies": "nope" },
     "a-lib": ["a-lib@1.0.0", ""]
   }
 }`))
 	if err != nil {
 		t.Fatalf("parse bun.lock: %v", err)
 	}
-	if len(lockfile.Unsupported) != 1 || lockfile.Unsupported[0].Descriptor != "bad" {
-		t.Fatalf("expected unsupported bad entry, got %#v", lockfile.Unsupported)
+	if len(lockfile.Unsupported) != 4 {
+		t.Fatalf("expected unsupported bad entries, got %#v", lockfile.Unsupported)
 	}
-	if len(lockfile.Entries) != 2 || lockfile.Entries[0].Name != "a-lib" || lockfile.Entries[1].Name != "z-lib" {
+	for i, expected := range []string{"bad-a", "bad-deps", "bad-m", "bad-z"} {
+		if lockfile.Unsupported[i].Descriptor != expected {
+			t.Fatalf("expected deterministic unsupported entry %d to be %q, got %#v", i, expected, lockfile.Unsupported)
+		}
+	}
+	if len(lockfile.Entries) != 3 || lockfile.Entries[0].Name != "a-lib" || lockfile.Entries[1].Name != "bad-deps" || lockfile.Entries[2].Name != "z-lib" {
 		t.Fatalf("expected deterministic sorted entries, got %#v", lockfile.Entries)
 	}
 }
 
 func TestParseBunLockfileMalformedJSONC(t *testing.T) {
-	if _, err := ParseBunLockfile([]byte(`{"packages": { /* nope `)); err == nil {
+	if _, err := ParseBunLockfile([]byte(`{"packages": { /* nope `)); err == nil || !strings.Contains(err.Error(), "parse bun.lock") {
 		t.Fatalf("expected malformed JSONC error")
+	}
+	if _, err := ParseBunLockfile([]byte(`{"packages": {"unterminated": ["unterminated@file:\"}`)); err == nil || !strings.Contains(err.Error(), "parse bun.lock") {
+		t.Fatalf("expected malformed string error, got %v", err)
 	}
 }

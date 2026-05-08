@@ -111,12 +111,12 @@ func TestRunPRBunLockfileOnlyDirectVersionAndSourceUpdate(t *testing.T) {
 		packageJSON,
 		packageJSON,
 		bunLock(`
-    "left-pad": ["left-pad@1.0.1", ""],
-    "source-lib": ["source-lib@1.0.0", "https://example.com/source-lib-v1.tgz"]
+    "left-pad": ["left-pad@1.0.1", "", {}, "sha512-left-old"],
+    "source-lib": ["source-lib@1.0.0", "https://example.com/source-lib-v1.tgz", {}, "sha512-source-old"]
 `),
 		bunLock(`
-    "left-pad": ["left-pad@2.0.0", ""],
-    "source-lib": ["source-lib@1.0.0", "https://example.com/source-lib-v2.tgz"]
+    "left-pad": ["left-pad@2.0.0", "", {}, "sha512-left-new"],
+    "source-lib": ["source-lib@1.0.0", "https://example.com/source-lib-v2.tgz", {}, "sha512-source-new"]
 `),
 	)
 	client.files = []ghclient.PullRequestFile{{Filename: "bun.lock", Status: "modified"}}
@@ -137,6 +137,9 @@ func TestRunPRBunLockfileOnlyDirectVersionAndSourceUpdate(t *testing.T) {
 	if !hasNote(payload.Notes, analysis.NoteNonRegistrySource) || !containsString(payload.RecommendedActions, analysis.ActionValidateSources) {
 		t.Fatalf("expected non-registry note/action, got notes=%#v actions=%#v", payload.Notes, payload.RecommendedActions)
 	}
+	if !hasNote(payload.Notes, analysis.NoteBunChecksumChanged) {
+		t.Fatalf("expected checksum evidence note for direct lockfile update, got %#v", payload.Notes)
+	}
 }
 
 func TestRunPRBunTransitiveAndChecksumOnlyExit2(t *testing.T) {
@@ -147,6 +150,10 @@ func TestRunPRBunTransitiveAndChecksumOnlyExit2(t *testing.T) {
     "transitive-lib": ["transitive-lib@2.0.0", ""]
 `),
 		"checksum": bunLock(`"left-pad": ["left-pad@1.0.1", "", {}, "sha512-new"]`),
+		"transitive-source": bunLock(`
+    "left-pad": ["left-pad@1.0.1", "", {}, "sha512-left"],
+    "transitive-source": ["transitive-source@https://example.com/transitive.tgz", "https://example.com/transitive.tgz"]
+`),
 	} {
 		t.Run(name, func(t *testing.T) {
 			client := newBunFakeGitHubClient(
@@ -159,6 +166,65 @@ func TestRunPRBunTransitiveAndChecksumOnlyExit2(t *testing.T) {
 			_, _, err := runPRWithClient(t, client, RunPROptions{Format: "json"})
 			assertExitCode(t, err, 2)
 		})
+	}
+}
+
+func TestRunPRBunRegistryAndSourceProtocols(t *testing.T) {
+	client := newBunFakeGitHubClient(
+		bunPackageJSON("bun@1.2.0", nil, nil, nil),
+		bunPackageJSON("bun@1.2.0", map[string]string{
+			"registry-lib":  "^1.0.0",
+			"alias-lib":     "npm:left-pad@^1.0.0",
+			"workspace-lib": "workspace:*",
+			"file-lib":      "file:../file-lib.tgz",
+			"link-lib":      "link:../link-lib",
+			"git-lib":       "git:https://github.com/acme/git-lib.git",
+			"github-lib":    "github:acme/github-lib",
+			"http-lib":      "https://example.com/http-lib.tgz",
+		}, nil, nil),
+		bunLock(""),
+		bunLock(`
+    "registry-lib": ["registry-lib@1.0.1", "https://registry.npmjs.org/registry-lib/-/registry-lib-1.0.1.tgz"],
+    "alias-lib": ["alias-lib@npm:left-pad@^1.0.0", "https://registry.npmjs.org/left-pad/-/left-pad-1.0.1.tgz"],
+    "workspace-lib": ["workspace-lib@workspace:*", "workspace:*"],
+    "file-lib": ["file-lib@file:../file-lib.tgz", "file:../file-lib.tgz"],
+    "link-lib": ["link-lib@link:../link-lib", "link:../link-lib"],
+    "git-lib": ["git-lib@git:https://github.com/acme/git-lib.git", "git:https://github.com/acme/git-lib.git"],
+    "github-lib": ["github-lib@github:acme/github-lib", "github:acme/github-lib"],
+    "http-lib": ["http-lib@https://example.com/http-lib.tgz", "https://example.com/http-lib.tgz"]
+`),
+	)
+
+	stdout, _, err := runPRWithClient(t, client, RunPROptions{Format: "json"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload := decodeJSONReport(t, stdout)
+	if !hasNote(payload.Notes, analysis.NoteBunWorkspaceProtocol) {
+		t.Fatalf("expected workspace protocol note, got %#v", payload.Notes)
+	}
+	if !containsString(payload.RecommendedActions, analysis.ActionValidateSources) {
+		t.Fatalf("expected source validation action, got %#v", payload.RecommendedActions)
+	}
+	for _, note := range payload.Notes {
+		if note.Code != analysis.NoteNonRegistrySource {
+			continue
+		}
+		if note.Dependency == "registry-lib" || note.Dependency == "alias-lib" {
+			t.Fatalf("did not expect registry-like Bun dependency %s to emit non-registry source note: %#v", note.Dependency, payload.Notes)
+		}
+	}
+	for _, dependency := range []string{"workspace-lib", "file-lib", "link-lib", "git-lib", "github-lib", "http-lib"} {
+		found := false
+		for _, note := range payload.Notes {
+			if note.Code == analysis.NoteNonRegistrySource && note.Dependency == dependency {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Fatalf("expected non-registry source note for %s, got %#v", dependency, payload.Notes)
+		}
 	}
 }
 
@@ -271,6 +337,42 @@ func TestRunPRBunPathFilteringAndNestedStandalone(t *testing.T) {
 	if change.Target != "services/api" || change.Manifest != "services/api/package.json" {
 		t.Fatalf("expected nested Bun target, got %#v", change)
 	}
+
+	stdout, _, err = runPRWithClient(t, client, RunPROptions{Format: "json", Paths: []string{"services/api/package.json"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	change = findChange(t, decodeJSONReport(t, stdout), "left-pad")
+	if change.Target != "services/api" || change.Manifest != "services/api/package.json" {
+		t.Fatalf("expected exact manifest path to select nested Bun target, got %#v", change)
+	}
+}
+
+func TestRunPRBunWorkspaceUsesSharedRootLockfile(t *testing.T) {
+	rootPackageJSON := bunWorkspaceRootPackageJSON()
+	client := newBunFakeGitHubClient(
+		rootPackageJSON,
+		rootPackageJSON,
+		bunLock(""),
+		bunLock(`"left-pad": ["left-pad@1.0.1", ""]`),
+	)
+	client.repositoryFilesByRef["base-sha"] = []string{"package.json", "bun.lock", "apps/web/package.json"}
+	client.repositoryFilesByRef["head-sha"] = append([]string(nil), client.repositoryFilesByRef["base-sha"]...)
+	client.filesByKey[fileKey("apps/web/package.json", "base-sha")] = bunPackageJSON("", nil, nil, nil)
+	client.filesByKey[fileKey("apps/web/package.json", "head-sha")] = bunPackageJSON("", map[string]string{"left-pad": "^1.0.0"}, nil, nil)
+	client.files = []ghclient.PullRequestFile{
+		{Filename: "apps/web/package.json", Status: "modified"},
+		{Filename: "bun.lock", Status: "modified"},
+	}
+
+	stdout, _, err := runPRWithClient(t, client, RunPROptions{Format: "json", Paths: []string{"apps/web/package.json"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	change := findChange(t, decodeJSONReport(t, stdout), "left-pad")
+	if change.Target != "apps/web" || change.Manifest != "apps/web/package.json" || change.ToVersion != "1.0.1" {
+		t.Fatalf("expected Bun workspace target with shared root lockfile, got %#v", change)
+	}
 }
 
 func TestRunPRBunAmbiguousWithMultipleJSLockfiles(t *testing.T) {
@@ -301,10 +403,45 @@ func TestRunPRBunBinaryLockfileOnlyUnsupportedExit2(t *testing.T) {
 	client.repositoryFilesByRef["head-sha"] = []string{"package.json", "bun.lockb"}
 	client.files = []ghclient.PullRequestFile{{Filename: "bun.lockb", Status: "modified"}}
 
-	_, stderr, err := runPRWithClient(t, client, RunPROptions{Format: "json"})
+	_, stderr, err := runPRWithClient(t, client, RunPROptions{Format: "human"})
 	assertExitCode(t, err, 2)
 	if !strings.Contains(stderr, "unsupported dependency entries") {
 		t.Fatalf("expected unsupported-only warning, got %q", stderr)
+	}
+	if strings.Contains(stderr, analysis.NoteBunBinaryLockfile) {
+		t.Fatalf("expected unsupported-only warning not to expose raw Bun note code, got %q", stderr)
+	}
+}
+
+func TestRunPRBunTextLockPreferredOverBinaryLockfile(t *testing.T) {
+	client := newBunFakeGitHubClient(
+		bunPackageJSON("bun@1.2.0", nil, nil, nil),
+		bunPackageJSON("bun@1.2.0", map[string]string{"left-pad": "^1.0.0"}, nil, nil),
+		bunLock(""),
+		bunLock(`"left-pad": ["left-pad@1.0.1", ""]`),
+	)
+	client.repositoryFilesByRef["base-sha"] = []string{"package.json", "bun.lock", "bun.lockb"}
+	client.repositoryFilesByRef["head-sha"] = append([]string(nil), client.repositoryFilesByRef["base-sha"]...)
+	client.filesByKey[fileKey("bun.lockb", "base-sha")] = []byte("binary lockfile should not be read")
+	client.filesByKey[fileKey("bun.lockb", "head-sha")] = []byte("binary lockfile should not be read")
+	client.files = []ghclient.PullRequestFile{
+		{Filename: "package.json", Status: "modified"},
+		{Filename: "bun.lock", Status: "modified"},
+		{Filename: "bun.lockb", Status: "modified"},
+	}
+
+	stdout, _, err := runPRWithClient(t, client, RunPROptions{Format: "json"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	change := findChange(t, decodeJSONReport(t, stdout), "left-pad")
+	if change.ToVersion != "1.0.1" {
+		t.Fatalf("expected text bun.lock to be used, got %#v", change)
+	}
+	for _, key := range client.getFileKeys {
+		if strings.Contains(key, "bun.lockb@") {
+			t.Fatalf("expected text bun.lock to win without reading bun.lockb, got file calls %#v", client.getFileKeys)
+		}
 	}
 }
 
@@ -342,6 +479,19 @@ func bunPackageJSON(packageManager string, dependencies, devDependencies, option
 	}
 	if packageManager != "" {
 		value["packageManager"] = packageManager
+	}
+	data, err := json.Marshal(value)
+	if err != nil {
+		panic(err)
+	}
+	return data
+}
+
+func bunWorkspaceRootPackageJSON() []byte {
+	value := map[string]any{
+		"name":           "root",
+		"packageManager": "bun@1.2.0",
+		"workspaces":     []string{"apps/*"},
 	}
 	data, err := json.Marshal(value)
 	if err != nil {

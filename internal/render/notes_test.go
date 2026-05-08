@@ -238,6 +238,9 @@ func TestRenderBunFallbackNotesAreReadable(t *testing.T) {
 	if !strings.Contains(koreanMarkdown, "Bun") || !strings.Contains(koreanMarkdown, "workspace-lib") {
 		t.Fatalf("expected readable Korean Bun notes, got %q", koreanMarkdown)
 	}
+	if !strings.Contains(koreanMarkdown, "지원되지 않습니다") || !strings.Contains(koreanMarkdown, "checksum 근거") {
+		t.Fatalf("expected readable Korean Bun note text, got %q", koreanMarkdown)
+	}
 }
 
 func noteReport() Report {
