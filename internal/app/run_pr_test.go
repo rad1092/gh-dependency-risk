@@ -583,21 +583,22 @@ func TestRunPRDependencyReviewUnavailableForAPIOnlyNonJSTargetIsActionable(t *te
 	}
 }
 
-func TestRunPRYarnUnsupportedFallbackErrorIsActionable(t *testing.T) {
+func TestRunPRYarnBerryMetadataOnlyUsesModernFallback(t *testing.T) {
 	client := newYarnRootFakeGitHubClient(t)
 	client.compareErr = &api.HTTPError{StatusCode: 404, Message: "dependency review disabled"}
 	client.filesByKey[fileKey("yarn.lock", "base-sha")] = readFixture(t, "yarn.unsupported.lock")
 	client.filesByKey[fileKey("yarn.lock", "head-sha")] = readFixture(t, "yarn.unsupported.lock")
 
-	_, _, err := runPRWithClient(t, client, RunPROptions{})
-	assertExitCode(t, err, 1)
-	for _, expected := range []string{
-		"Yarn Berry",
-		"Plug'n'Play",
-	} {
-		if !strings.Contains(err.Error(), expected) {
-			t.Fatalf("expected unsupported yarn fallback error containing %q, got %v", expected, err)
-		}
+	stdout, _, err := runPRWithClient(t, client, RunPROptions{Format: "json"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload := decodeJSONReport(t, stdout)
+	if payload.DependencyReviewAvailable {
+		t.Fatalf("expected local fallback for Yarn Berry metadata lockfile, got %#v", payload)
+	}
+	if !hasNote(payload.Notes, analysis.NoteYarnBerryLockfile) {
+		t.Fatalf("expected Yarn Berry fallback note, got %#v", payload.Notes)
 	}
 }
 

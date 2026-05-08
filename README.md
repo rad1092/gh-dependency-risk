@@ -23,7 +23,9 @@ fallback. An asciinema-compatible recording is also checked in at
   - npm: `package.json`, `package-lock.json`
   - pnpm: `package.json`, `pnpm-lock.yaml`
   - pnpm workspace discovery: `pnpm-workspace.yaml`
-  - yarn: `package.json`, `yarn.lock` (narrow Yarn Classic / node_modules fallback only)
+  - yarn: `package.json`, classic or modern `yarn.lock`; Yarn Berry / modern
+    Yarn fallback is direct-dependency only and does not parse `.pnp.cjs` or
+    reconstruct the PnP graph
   - Python: `requirements.txt`, PEP 621 `pyproject.toml`, and Poetry
     `pyproject.toml` direct dependency declarations; Poetry may use
     `poetry.lock` and PEP 621 may use `uv.lock` to enrich direct resolved
@@ -289,7 +291,7 @@ The score model stays heuristic, deterministic, and intentionally auditable.
 | npm | Dependency Review data is used when available. | Local fallback analyzes `package.json` and `package-lock.json`. |
 | pnpm | Dependency Review data is used when available. | Local fallback analyzes `package.json`, `pnpm-lock.yaml`, and `pnpm-workspace.yaml` discovery. |
 | Yarn Classic | Dependency Review data is used when available. | Local fallback analyzes `package.json` and classic `yarn.lock`. |
-| Yarn Berry / PnP | Dependency Review data may be surfaced when GitHub provides it. | Local fallback fails honestly when the lockfile cannot be analyzed faithfully. |
+| Yarn Berry / modern Yarn | Dependency Review data is used when available. | Local fallback compares direct `package.json` declarations with matching modern `yarn.lock` entries. `.yarnrc.yml` is used for detection/nodeLinker notes only; no `.pnp.cjs`, cache archive inspection, Yarn command execution, registry lookup, or full PnP graph reconstruction. |
 | Python `requirements.txt` / PEP 621 `pyproject.toml` + optional `uv.lock` / Poetry `pyproject.toml` + optional `poetry.lock` | Dependency Review data is used when available. | Local fallback compares direct dependency declarations and can use `uv.lock` or `poetry.lock` to enrich matching direct resolved versions and source metadata. No resolver, broad lockfile support, or full transitive analysis. |
 | Go modules | Dependency Review data is used when available. | Local fallback analyzes static `go.mod` `require`/`replace` changes. `go.sum` is checksum evidence only; no resolver, full module graph, `go list`, or `go mod` execution. |
 | Cargo, Composer, Maven, RubyGems, SwiftPM | Dependency Review data may be surfaced when GitHub provides it. | No local fallback in this release. |
@@ -309,7 +311,7 @@ Supported target shapes:
 - npm workspaces with a shared root `package-lock.json`
 - pnpm root projects with `package.json` and `pnpm-lock.yaml`
 - pnpm workspaces with `pnpm-workspace.yaml` and a shared root `pnpm-lock.yaml`
-- Yarn root projects with `package.json` and `yarn.lock`
+- Yarn root projects with `package.json` and classic or modern `yarn.lock`
 - Yarn workspaces discovered from `package.json` workspaces and a shared root
   `yarn.lock`
 - nested standalone subprojects with their own `package.json` and either
@@ -351,9 +353,15 @@ Notes:
 - npm workspaces reuse the shared root `package-lock.json`
 - pnpm workspaces reuse the shared root `pnpm-lock.yaml` and use
   `pnpm-workspace.yaml` package globs for discovery
-- Yarn local fallback supports classic `yarn.lock` installs only
-- likely Yarn Berry / Plug'n'Play lockfiles are detected and reported as an
-  unsupported local-fallback case instead of being analyzed inaccurately
+- Yarn Berry / modern Yarn local fallback is static and direct-only: it reads
+  `package.json`, matching modern `yarn.lock` entries, and optional
+  `.yarnrc.yml` `nodeLinker` settings without running `yarn`, `npm`, or `node`
+- Yarn Berry / modern Yarn local fallback ignores transitive-only lockfile
+  updates, checksum-only updates, `.pnp.cjs`, PnP loader files, cache archives,
+  plugins, constraints, and full PnP graph reconstruction
+- Yarn Berry protocols such as `workspace:`, `portal:`, `link:`, `file:`,
+  `patch:`, git, and HTTP(S) sources are surfaced as conservative notes/source
+  validation signals when tied to changed direct dependencies
 - large lockfiles served by the GitHub contents API without inline content are
   still fetched through the corresponding blob object instead of failing early
 - if a lockfile-only workspace change cannot be mapped exactly, the report calls

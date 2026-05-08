@@ -131,6 +131,12 @@ func RunPR(ctx context.Context, deps RunPRDependencies, opts RunPROptions) error
 			localInputs = append(localInputs, input)
 			continue
 		}
+		if input, handled, err := loadYarnBerryLocalInputIfModern(ctx, cache, pr.BaseSHA, pr.HeadSHA, target, reviewSnapshot.Available); err != nil {
+			return &ExitError{Code: 1, Err: err}
+		} else if handled {
+			localInputs = append(localInputs, input)
+			continue
+		}
 		baseManifest, headManifest, baseLockfile, headLockfile, err := loadLocalTargetData(ctx, cache, pr.BaseSHA, pr.HeadSHA, target, reviewSnapshot.Available)
 		if err != nil {
 			return &ExitError{Code: 1, Err: err}
@@ -361,6 +367,9 @@ func loadLocalTargetData(ctx context.Context, cache *repoDataCache, baseSHA, hea
 		return baseManifest, headManifest, nil, nil, nil
 	}
 	if !target.LocalFallback || strings.TrimSpace(target.LockfilePath) == "" {
+		return baseManifest, headManifest, nil, nil, nil
+	}
+	if dependencyReviewAvailable && isYarnBerryTarget(target) {
 		return baseManifest, headManifest, nil, nil, nil
 	}
 

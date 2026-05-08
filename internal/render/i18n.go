@@ -168,6 +168,11 @@ func localizeAction(action, lang string) string {
 }
 
 func localizeNote(note analysis.Note, lang string) string {
+	if lang != "en" {
+		if text, ok := localizeYarnNoteKorean(note); ok {
+			return text
+		}
+	}
 	if lang == "en" {
 		switch note.Code {
 		case analysis.NoteDependencyReviewFallback:
@@ -188,6 +193,24 @@ func localizeNote(note analysis.Note, lang string) string {
 			return fmt.Sprintf("Go language directive changed: %s", note.Detail)
 		case analysis.NoteGoToolchainChanged:
 			return fmt.Sprintf("Go toolchain directive changed: %s", note.Detail)
+		case analysis.NoteYarnBerryLockfile:
+			return fmt.Sprintf("Yarn Berry lockfile fallback was used: %s", note.Detail)
+		case analysis.NoteYarnNodeLinker:
+			return fmt.Sprintf("Yarn nodeLinker setting was detected: %s", note.Detail)
+		case analysis.NoteYarnWorkspaceProtocol:
+			return fmt.Sprintf("Yarn dependency %s uses the workspace protocol: %s", note.Dependency, note.Detail)
+		case analysis.NoteYarnPatchProtocol:
+			return fmt.Sprintf("Yarn dependency %s uses the patch protocol: %s", note.Dependency, note.Detail)
+		case analysis.NoteYarnPortalProtocol:
+			return fmt.Sprintf("Yarn dependency %s uses the portal protocol: %s", note.Dependency, note.Detail)
+		case analysis.NoteYarnLinkProtocol:
+			return fmt.Sprintf("Yarn dependency %s uses the link protocol: %s", note.Dependency, note.Detail)
+		case analysis.NoteYarnFileProtocol:
+			return fmt.Sprintf("Yarn dependency %s uses the file protocol: %s", note.Dependency, note.Detail)
+		case analysis.NoteYarnGitSource:
+			return fmt.Sprintf("Yarn dependency %s uses a git source: %s", note.Dependency, note.Detail)
+		case analysis.NoteYarnChecksumChanged:
+			return fmt.Sprintf("Yarn checksum evidence changed for %s: %s", note.Dependency, note.Detail)
 		default:
 			return note.Code
 		}
@@ -214,6 +237,31 @@ func localizeNote(note analysis.Note, lang string) string {
 		return fmt.Sprintf("Go toolchain 지시자가 변경되었습니다: %s", note.Detail)
 	default:
 		return note.Code
+	}
+}
+
+func localizeYarnNoteKorean(note analysis.Note) (string, bool) {
+	switch note.Code {
+	case analysis.NoteYarnBerryLockfile:
+		return fmt.Sprintf("Yarn Berry lockfile fallback을 사용했습니다: %s", note.Detail), true
+	case analysis.NoteYarnNodeLinker:
+		return fmt.Sprintf("Yarn nodeLinker 설정을 감지했습니다: %s", note.Detail), true
+	case analysis.NoteYarnWorkspaceProtocol:
+		return fmt.Sprintf("Yarn 의존성 %s가 workspace 프로토콜을 사용합니다: %s", note.Dependency, note.Detail), true
+	case analysis.NoteYarnPatchProtocol:
+		return fmt.Sprintf("Yarn 의존성 %s가 patch 프로토콜을 사용합니다: %s", note.Dependency, note.Detail), true
+	case analysis.NoteYarnPortalProtocol:
+		return fmt.Sprintf("Yarn 의존성 %s가 portal 프로토콜을 사용합니다: %s", note.Dependency, note.Detail), true
+	case analysis.NoteYarnLinkProtocol:
+		return fmt.Sprintf("Yarn 의존성 %s가 link 프로토콜을 사용합니다: %s", note.Dependency, note.Detail), true
+	case analysis.NoteYarnFileProtocol:
+		return fmt.Sprintf("Yarn 의존성 %s가 file 프로토콜을 사용합니다: %s", note.Dependency, note.Detail), true
+	case analysis.NoteYarnGitSource:
+		return fmt.Sprintf("Yarn 의존성 %s가 git 소스를 사용합니다: %s", note.Dependency, note.Detail), true
+	case analysis.NoteYarnChecksumChanged:
+		return fmt.Sprintf("Yarn checksum 근거가 변경되었습니다(%s): %s", note.Dependency, note.Detail), true
+	default:
+		return "", false
 	}
 }
 

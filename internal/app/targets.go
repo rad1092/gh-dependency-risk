@@ -151,6 +151,7 @@ func discoverJSTargets(ctx context.Context, cache *repoDataCache, baseRef, headR
 	npmLockfilePaths := pathSet(unionPaths(filterPaths(baseFiles, "package-lock.json"), filterPaths(headFiles, "package-lock.json")))
 	pnpmLockfilePaths := pathSet(unionPaths(filterPaths(baseFiles, "pnpm-lock.yaml"), filterPaths(headFiles, "pnpm-lock.yaml")))
 	yarnLockfilePaths := pathSet(unionPaths(filterPaths(baseFiles, "yarn.lock"), filterPaths(headFiles, "yarn.lock")))
+	yarnRCPaths := pathSet(unionPaths(filterPaths(baseFiles, ".yarnrc.yml"), filterPaths(headFiles, ".yarnrc.yml")))
 	pnpmWorkspacePaths := unionPaths(filterPaths(baseFiles, "pnpm-workspace.yaml"), filterPaths(headFiles, "pnpm-workspace.yaml"))
 	manifestCache := map[string][2]*npm.PackageManifest{}
 	for _, manifestPath := range manifestPaths {
@@ -299,25 +300,34 @@ func discoverJSTargets(ctx context.Context, cache *repoDataCache, baseRef, headR
 		}
 
 		if workspaceRoot, ok := yarnWorkspaceRoots[manifestPath]; ok {
+			workspaceRootManifest := manifestPathForDir(workspaceRoot)
+			yarnManager := "yarn"
+			if hasYarnBerrySignal(manifestCache[manifestPath], dir, yarnRCPaths) || hasYarnBerrySignal(manifestCache[workspaceRootManifest], workspaceRoot, yarnRCPaths) {
+				yarnManager = packageManagerYarnBerry
+			}
 			grouped[manifestPath] = append(grouped[manifestPath], analysis.AnalysisTarget{
 				DisplayName:       displayNameForManifest(manifestPath),
 				ManifestPath:      manifestPath,
 				LockfilePath:      yarnLockfilePathForDir(workspaceRoot),
 				Kind:              analysis.TargetKindWorkspace,
 				WorkspaceRootPath: workspaceRoot,
-				PackageManager:    "yarn",
+				PackageManager:    yarnManager,
 				Ecosystem:         string(review.EcosystemYarn),
 				TargetID:          review.TargetIdentity(manifestPath, review.EcosystemYarn, review.PackageManagerYarn),
 				OwningDirectory:   dir,
 				LocalFallback:     true,
 			})
 		} else if _, ok := yarnLockfilePaths[yarnLockfilePath]; ok {
+			yarnManager := "yarn"
+			if hasYarnBerrySignal(manifestCache[manifestPath], dir, yarnRCPaths) {
+				yarnManager = packageManagerYarnBerry
+			}
 			grouped[manifestPath] = append(grouped[manifestPath], analysis.AnalysisTarget{
 				DisplayName:     displayNameForManifest(manifestPath),
 				ManifestPath:    manifestPath,
 				LockfilePath:    yarnLockfilePath,
 				Kind:            kindForManifest(manifestPath),
-				PackageManager:  "yarn",
+				PackageManager:  yarnManager,
 				Ecosystem:       string(review.EcosystemYarn),
 				TargetID:        review.TargetIdentity(manifestPath, review.EcosystemYarn, review.PackageManagerYarn),
 				OwningDirectory: dir,

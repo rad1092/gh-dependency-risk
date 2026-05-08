@@ -86,6 +86,15 @@ const (
 	NoteGoChecksumChanged        = "go_checksum_changed"
 	NoteGoDirectiveChanged       = "go_directive_changed"
 	NoteGoToolchainChanged       = "go_toolchain_directive_changed"
+	NoteYarnBerryLockfile        = "yarn_berry_lockfile"
+	NoteYarnNodeLinker           = "yarn_node_linker"
+	NoteYarnWorkspaceProtocol    = "yarn_workspace_protocol"
+	NoteYarnPatchProtocol        = "yarn_patch_protocol"
+	NoteYarnPortalProtocol       = "yarn_portal_protocol"
+	NoteYarnLinkProtocol         = "yarn_link_protocol"
+	NoteYarnFileProtocol         = "yarn_file_protocol"
+	NoteYarnGitSource            = "yarn_git_source"
+	NoteYarnChecksumChanged      = "yarn_checksum_changed"
 )
 
 type AnalysisTarget struct {

@@ -139,6 +139,64 @@ func TestRenderGoFallbackNotesAreReadable(t *testing.T) {
 	}
 }
 
+func TestRenderYarnBerryFallbackNotesAreReadable(t *testing.T) {
+	report := noteReport()
+	report.Analysis.Notes = []analysis.Note{
+		{Code: analysis.NoteYarnBerryLockfile, Detail: "yarn.lock"},
+		{Code: analysis.NoteYarnNodeLinker, Detail: "nodeLinker node-modules -> pnp"},
+		{Code: analysis.NoteYarnWorkspaceProtocol, Dependency: "workspace-lib", Detail: "workspace:*"},
+		{Code: analysis.NoteYarnPatchProtocol, Dependency: "patched", Detail: "patch:patched@npm%3A1.0.0#./patches/patched.patch"},
+		{Code: analysis.NoteYarnPortalProtocol, Dependency: "portal-lib", Detail: "portal:../portal-lib"},
+		{Code: analysis.NoteYarnLinkProtocol, Dependency: "linked-lib", Detail: "link:../linked-lib"},
+		{Code: analysis.NoteYarnFileProtocol, Dependency: "file-lib", Detail: "file:../file-lib.tgz"},
+		{Code: analysis.NoteYarnGitSource, Dependency: "git-lib", Detail: "git:https://github.com/acme/git-lib.git"},
+		{Code: analysis.NoteYarnChecksumChanged, Dependency: "left-pad", Detail: "checksum 10c0 -> 20c0"},
+	}
+
+	englishMarkdown, err := Render(report, "markdown", "en")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, expected := range []string{
+		"Yarn Berry lockfile fallback was used",
+		"Yarn nodeLinker setting was detected",
+		"uses the workspace protocol",
+		"uses the patch protocol",
+		"uses the portal protocol",
+		"uses the link protocol",
+		"uses the file protocol",
+		"uses a git source",
+		"Yarn checksum evidence changed",
+	} {
+		if !strings.Contains(englishMarkdown, expected) {
+			t.Fatalf("expected English Yarn note %q, got %q", expected, englishMarkdown)
+		}
+	}
+
+	koreanMarkdown, err := Render(report, "markdown", "ko")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, raw := range []string{
+		analysis.NoteYarnBerryLockfile,
+		analysis.NoteYarnNodeLinker,
+		analysis.NoteYarnWorkspaceProtocol,
+		analysis.NoteYarnPatchProtocol,
+		analysis.NoteYarnPortalProtocol,
+		analysis.NoteYarnLinkProtocol,
+		analysis.NoteYarnFileProtocol,
+		analysis.NoteYarnGitSource,
+		analysis.NoteYarnChecksumChanged,
+	} {
+		if strings.Contains(koreanMarkdown, raw) {
+			t.Fatalf("did not expect Korean output to expose raw note code %q, got %q", raw, koreanMarkdown)
+		}
+	}
+	if !strings.Contains(koreanMarkdown, "Yarn") || !strings.Contains(koreanMarkdown, "workspace-lib") {
+		t.Fatalf("expected readable Korean Yarn notes, got %q", koreanMarkdown)
+	}
+}
+
 func noteReport() Report {
 	return Report{
 		Repo: "owner/repo",

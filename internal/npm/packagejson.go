@@ -9,6 +9,7 @@ import (
 
 type PackageManifest struct {
 	Name                 string            `json:"name"`
+	PackageManager       string            `json:"packageManager"`
 	Dependencies         map[string]string `json:"dependencies"`
 	DevDependencies      map[string]string `json:"devDependencies"`
 	OptionalDependencies map[string]string `json:"optionalDependencies"`
@@ -22,6 +23,7 @@ func ParsePackageManifest(data []byte) (*PackageManifest, error) {
 
 	var raw struct {
 		Name                 string            `json:"name"`
+		PackageManager       string            `json:"packageManager"`
 		Dependencies         map[string]string `json:"dependencies"`
 		DevDependencies      map[string]string `json:"devDependencies"`
 		OptionalDependencies map[string]string `json:"optionalDependencies"`
@@ -32,6 +34,7 @@ func ParsePackageManifest(data []byte) (*PackageManifest, error) {
 	}
 	manifest := &PackageManifest{
 		Name:                 raw.Name,
+		PackageManager:       raw.PackageManager,
 		Dependencies:         raw.Dependencies,
 		DevDependencies:      raw.DevDependencies,
 		OptionalDependencies: raw.OptionalDependencies,
