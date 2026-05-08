@@ -194,13 +194,17 @@ func parsePoetryDependencyTable(normalizedName, originalName string, table map[s
 	version := stringValue(table["version"])
 	extras := stringSliceValue(table["extras"])
 	markers := stringValue(table["markers"])
+	python := stringValue(table["python"])
+	platform := stringValue(table["platform"])
 	optional := boolValue(table["optional"])
+	allowPrereleases := boolValue(table["allow-prereleases"])
+	develop := boolValue(table["develop"])
 	if optional {
 		scope = ScopeOptional
 	}
 	source := poetryDependencySource(table)
 
-	parts := make([]string, 0, 5)
+	parts := make([]string, 0, 9)
 	if version != "" {
 		parts = append(parts, version)
 	}
@@ -210,8 +214,20 @@ func parsePoetryDependencyTable(normalizedName, originalName string, table map[s
 	if markers != "" {
 		parts = append(parts, "markers="+markers)
 	}
+	if python != "" {
+		parts = append(parts, "python="+python)
+	}
+	if platform != "" {
+		parts = append(parts, "platform="+platform)
+	}
 	if optional {
 		parts = append(parts, "optional=true")
+	}
+	if allowPrereleases {
+		parts = append(parts, "allow-prereleases=true")
+	}
+	if develop {
+		parts = append(parts, "develop=true")
 	}
 	if source != "" {
 		parts = append(parts, "source="+source)

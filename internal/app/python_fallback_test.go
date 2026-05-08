@@ -244,6 +244,24 @@ func TestRunPRPoetryFallbackAddedUsesLockVersion(t *testing.T) {
 	}
 }
 
+func TestRunPRPoetryFallbackDeclarationOnlyWithoutLockfile(t *testing.T) {
+	client := newPoetryFakeGitHubClient(
+		poetryPyProject(nil, nil),
+		poetryPyProject(map[string]string{"requests": "^2.32"}, nil),
+		"",
+		"",
+	)
+
+	stdout, _, err := runPRWithClient(t, client, RunPROptions{Format: "json"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	change := findChange(t, decodeJSONReport(t, stdout), "requests")
+	if change.ChangeType != analysis.ChangeAdded || change.ToRequirement != "^2.32" || change.ToVersion != "" {
+		t.Fatalf("unexpected Poetry declaration-only change: %#v", change)
+	}
+}
+
 func TestRunPRPoetryFallbackUpdatedUsesLockVersion(t *testing.T) {
 	client := newPoetryFakeGitHubClient(
 		poetryPyProject(map[string]string{"django": "^4.2"}, nil),
@@ -265,6 +283,34 @@ func TestRunPRPoetryFallbackUpdatedUsesLockVersion(t *testing.T) {
 	}
 }
 
+func TestRunPRPoetryLockfileOnlyDirectResolvedVersionUpdate(t *testing.T) {
+	client := newPoetryLockOnlyFakeGitHubClient(
+		poetryPyProject(map[string]string{"requests": "^2.32"}, nil),
+		poetryLock(map[string]string{"requests": "2.32.2"}, nil),
+		poetryLock(map[string]string{"requests": "2.32.3"}, nil),
+	)
+
+	stdout, _, err := runPRWithClient(t, client, RunPROptions{Format: "json"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	change := findChange(t, decodeJSONReport(t, stdout), "requests")
+	if change.ChangeType != analysis.ChangeUpdated || change.FromRequirement != "^2.32" || change.ToRequirement != "^2.32" || change.FromVersion != "2.32.2" || change.ToVersion != "2.32.3" {
+		t.Fatalf("expected direct lockfile resolved version update, got %#v", change)
+	}
+}
+
+func TestRunPRPoetryLockfileOnlyTransitiveChangeIgnored(t *testing.T) {
+	client := newPoetryLockOnlyFakeGitHubClient(
+		poetryPyProject(map[string]string{"requests": "^2.32"}, nil),
+		poetryLock(map[string]string{"requests": "2.32.3", "urllib3": "2.2.1"}, nil),
+		poetryLock(map[string]string{"requests": "2.32.3", "urllib3": "2.2.2"}, nil),
+	)
+
+	_, _, err := runPRWithClient(t, client, RunPROptions{Format: "json"})
+	assertExitCode(t, err, 2)
+}
+
 func TestRunPRPoetryFallbackRemovedUsesLockVersion(t *testing.T) {
 	client := newPoetryFakeGitHubClient(
 		poetryPyProject(map[string]string{"flask": "^3.0"}, nil),
@@ -280,6 +326,32 @@ func TestRunPRPoetryFallbackRemovedUsesLockVersion(t *testing.T) {
 	change := findChange(t, decodeJSONReport(t, stdout), "flask")
 	if change.ChangeType != analysis.ChangeRemoved || change.FromVersion != "3.0.3" || change.ToVersion != "" {
 		t.Fatalf("unexpected Poetry removed change: %#v", change)
+	}
+}
+
+func TestRunPRPoetryFallbackNonRegistrySourceUsesLockfileWhenPyProjectHasNoSource(t *testing.T) {
+	client := newPoetryFakeGitHubClient(
+		poetryPyProject(nil, nil),
+		poetryPyProject(map[string]string{"git-lib": "^0.1"}, nil),
+		"",
+		poetryLockWithSource("git-lib", "0.1.0", "git", "https://github.com/example/from-lock.git", "main"),
+	)
+
+	stdout, _, err := runPRWithClient(t, client, RunPROptions{Format: "json"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload := decodeJSONReport(t, stdout)
+	change := findChange(t, payload, "git-lib")
+	if change.Resolved != "git:https://github.com/example/from-lock.git#main" {
+		t.Fatalf("expected lockfile source to enrich missing pyproject source, got %#v", change)
+	}
+	note := findNote(t, payload.Notes, analysis.NoteNonRegistrySource)
+	if note.Dependency != "git-lib" || note.Detail != change.Resolved {
+		t.Fatalf("expected non-registry note for lockfile source, got %#v", payload.Notes)
+	}
+	if !containsString(payload.RecommendedActions, analysis.ActionValidateSources) {
+		t.Fatalf("expected validate source recommendation, got %#v", payload.RecommendedActions)
 	}
 }
 
@@ -396,6 +468,36 @@ func TestRunPRPoetryNestedTargetAndPathFiltering(t *testing.T) {
 	_ = findChange(t, payload, "celery")
 }
 
+func TestRunPRMixedPEP621AndPoetryPrefersPEP621Target(t *testing.T) {
+	client := newMixedPEP621PoetryFakeGitHubClient()
+
+	stdout, _, err := runPRWithClient(t, client, RunPROptions{ListTargets: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(stdout, "manager=pyproject") || strings.Contains(stdout, "manager=poetry") || strings.Contains(stdout, "lockfile: poetry.lock") {
+		t.Fatalf("expected mixed pyproject.toml to prefer PEP 621 target without Poetry ambiguity, got %q", stdout)
+	}
+
+	stdout, _, err = runPRWithClient(t, client, RunPROptions{Format: "json", Paths: []string{"pyproject.toml"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload := decodeJSONReport(t, stdout)
+	_ = findChange(t, payload, "requests")
+	if len(payload.Targets) != 1 || payload.Targets[0].Target.ManifestPath != "pyproject.toml" || payload.Targets[0].Target.LockfilePath != "" {
+		t.Fatalf("expected single pyproject manifest target without Poetry lockfile, got %#v", payload.Targets)
+	}
+	if !hasNote(payload.Notes, analysis.NoteUnsupportedDependency) {
+		t.Fatalf("expected Poetry table unsupported note on PEP 621 path, got %#v", payload.Notes)
+	}
+	for _, change := range payload.Changes {
+		if change.Name == "flask" {
+			t.Fatalf("did not expect Poetry dependency to be analyzed through mixed PEP 621 target, got %#v", payload.Changes)
+		}
+	}
+}
+
 func newPythonRequirementsFakeGitHubClient(base, head string) *fakeGitHubClient {
 	client := newPythonBaseFakeGitHubClient()
 	client.files = []ghclient.PullRequestFile{{Filename: "requirements.txt", Status: "modified"}}
@@ -463,6 +565,18 @@ func newPoetryFakeGitHubClient(basePyProject, headPyProject, baseLock, headLock 
 	return client
 }
 
+func newPoetryLockOnlyFakeGitHubClient(pyProject, baseLock, headLock string) *fakeGitHubClient {
+	client := newPythonBaseFakeGitHubClient()
+	client.files = []ghclient.PullRequestFile{{Filename: "poetry.lock", Status: "modified"}}
+	client.repositoryFilesByRef["base-sha"] = []string{"pyproject.toml", "poetry.lock"}
+	client.repositoryFilesByRef["head-sha"] = []string{"pyproject.toml", "poetry.lock"}
+	client.filesByKey[fileKey("pyproject.toml", "base-sha")] = []byte(pyProject)
+	client.filesByKey[fileKey("pyproject.toml", "head-sha")] = []byte(pyProject)
+	client.filesByKey[fileKey("poetry.lock", "base-sha")] = []byte(baseLock)
+	client.filesByKey[fileKey("poetry.lock", "head-sha")] = []byte(headLock)
+	return client
+}
+
 func newNestedPoetryFakeGitHubClient() *fakeGitHubClient {
 	client := newPythonBaseFakeGitHubClient()
 	client.files = []ghclient.PullRequestFile{
@@ -475,6 +589,42 @@ func newNestedPoetryFakeGitHubClient() *fakeGitHubClient {
 	client.filesByKey[fileKey("services/worker/pyproject.toml", "head-sha")] = []byte(poetryPyProject(map[string]string{"celery": "^5.4"}, nil))
 	client.filesByKey[fileKey("services/worker/poetry.lock", "base-sha")] = []byte("")
 	client.filesByKey[fileKey("services/worker/poetry.lock", "head-sha")] = []byte(poetryLock(map[string]string{"celery": "5.4.0"}, nil))
+	return client
+}
+
+func newMixedPEP621PoetryFakeGitHubClient() *fakeGitHubClient {
+	client := newPythonBaseFakeGitHubClient()
+	base := `[project]
+dependencies = []
+
+[tool.poetry]
+name = "demo"
+version = "0.1.0"
+
+[tool.poetry.dependencies]
+python = "^3.12"
+`
+	head := `[project]
+dependencies = ["requests==2.32.3"]
+
+[tool.poetry]
+name = "demo"
+version = "0.1.0"
+
+[tool.poetry.dependencies]
+python = "^3.12"
+flask = "^3.0"
+`
+	client.files = []ghclient.PullRequestFile{
+		{Filename: "pyproject.toml", Status: "modified"},
+		{Filename: "poetry.lock", Status: "modified"},
+	}
+	client.repositoryFilesByRef["base-sha"] = []string{"pyproject.toml", "poetry.lock"}
+	client.repositoryFilesByRef["head-sha"] = []string{"pyproject.toml", "poetry.lock"}
+	client.filesByKey[fileKey("pyproject.toml", "base-sha")] = []byte(base)
+	client.filesByKey[fileKey("pyproject.toml", "head-sha")] = []byte(head)
+	client.filesByKey[fileKey("poetry.lock", "base-sha")] = []byte("")
+	client.filesByKey[fileKey("poetry.lock", "head-sha")] = []byte(poetryLock(map[string]string{"flask": "3.0.3"}, nil))
 	return client
 }
 

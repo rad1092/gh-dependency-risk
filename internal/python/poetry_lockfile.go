@@ -70,7 +70,7 @@ func ParsePoetryLockfile(data []byte) (Lockfile, error) {
 			SourceReference: sourceReference,
 		})
 	}
-	sort.Slice(lockfile.Packages, func(i, j int) bool {
+	sort.SliceStable(lockfile.Packages, func(i, j int) bool {
 		return lockfile.Packages[i].Name < lockfile.Packages[j].Name
 	})
 	return lockfile, nil

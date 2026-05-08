@@ -365,6 +365,12 @@ Notes:
 - `poetry.lock` support is limited to enriching direct Poetry dependencies with
   resolved versions and source metadata; it does not reconstruct a full
   transitive dependency graph
+- if a direct Poetry dependency declaration is unchanged but the matching
+  `poetry.lock` resolved version changes, local fallback reports that direct
+  dependency as updated
+- `poetry.lock` package changes without a matching direct dependency declaration
+  in `pyproject.toml` are treated as transitive-only and do not create report
+  changes
 - out of scope for now: bun, `package.json5`, `package.yaml`, pnpm catalogs,
   pnpm branch lockfiles, broad non-JS local fallback, Go module local fallback,
   and full Yarn Plug'n'Play graph resolution

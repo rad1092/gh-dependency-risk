@@ -45,6 +45,50 @@ func TestAnalyzeLocalSupportedAndUnsupportedScoresOnlySupportedChange(t *testing
 	}
 }
 
+func TestAnalyzeLocalUnknownScopeDoesNotUseAddedRuntimeOrDevDrivers(t *testing.T) {
+	result := AnalyzeLocalDirectDependencies(LocalInput{
+		Target:                    pythonRequirementsTarget(),
+		DependencyReviewAvailable: false,
+		HeadDependencies: []LocalDependency{
+			{Name: "twine", Requirement: "^5", Scope: ScopeUnknown},
+		},
+	})
+
+	if len(result.ChangedDependencies) != 1 || result.ChangedDependencies[0].Name != "twine" {
+		t.Fatalf("expected unknown-scope dependency change, got %#v", result.ChangedDependencies)
+	}
+	if result.Score != 0 || len(result.RiskDrivers) != 0 {
+		t.Fatalf("expected unknown scope not to use added runtime/dev scoring, got score=%d drivers=%#v", result.Score, result.RiskDrivers)
+	}
+}
+
+func TestAnalyzeLocalNonRegistrySourceIsInformational(t *testing.T) {
+	withoutSource := AnalyzeLocalDirectDependencies(LocalInput{
+		Target:                    pythonRequirementsTarget(),
+		DependencyReviewAvailable: false,
+		HeadDependencies: []LocalDependency{
+			{Name: "git-lib", Requirement: "^0.1", Version: "0.1.0", Scope: ScopeRuntime},
+		},
+	})
+	withSource := AnalyzeLocalDirectDependencies(LocalInput{
+		Target:                    pythonRequirementsTarget(),
+		DependencyReviewAvailable: false,
+		HeadDependencies: []LocalDependency{
+			{Name: "git-lib", Requirement: "^0.1", Version: "0.1.0", Source: "git:https://github.com/example/git-lib.git#main", Scope: ScopeRuntime},
+		},
+	})
+
+	if withoutSource.Score != withSource.Score {
+		t.Fatalf("expected source note not to change score, got without=%d with=%d", withoutSource.Score, withSource.Score)
+	}
+	if !hasNoteCode(withSource.Notes, NoteNonRegistrySource) {
+		t.Fatalf("expected non-registry source note, got %#v", withSource.Notes)
+	}
+	if !containsAction(withSource.RecommendedActions, ActionValidateSources) {
+		t.Fatalf("expected validate-source action, got %#v", withSource.RecommendedActions)
+	}
+}
+
 func pythonRequirementsTarget() AnalysisTarget {
 	return AnalysisTarget{
 		DisplayName:    "root",
@@ -59,6 +103,15 @@ func pythonRequirementsTarget() AnalysisTarget {
 func hasNoteCode(notes []Note, expected string) bool {
 	for _, note := range notes {
 		if note.Code == expected {
+			return true
+		}
+	}
+	return false
+}
+
+func containsAction(actions []string, expected string) bool {
+	for _, action := range actions {
+		if action == expected {
 			return true
 		}
 	}
