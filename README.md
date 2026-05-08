@@ -366,6 +366,8 @@ Notes:
 - `uv.lock` support is limited to enriching PEP 621 direct dependencies with
   matching direct resolved versions and recognized source metadata; registry,
   virtual, and workspace sources do not create non-registry source notes
+- standalone editable `uv.lock` sources are unsupported; `editable=true` is
+  only accepted as a `path` or `directory` source modifier
 - unknown `uv.lock` source shapes are reported as unsupported dependency
   entries rather than guessed
 - `poetry.lock` support is limited to enriching direct Poetry dependencies with

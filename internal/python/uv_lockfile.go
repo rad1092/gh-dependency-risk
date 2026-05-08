@@ -135,9 +135,6 @@ func parseUvPackageSource(name string, source map[string]any) (string, string, s
 		reference := uvEditableReference(source)
 		return formatPoetrySource("directory", value, reference), "directory", value, reference, UnsupportedEntry{}
 	}
-	if value, ok := uvSingleStringSource(source, keys, "editable"); ok {
-		return formatPoetrySource("editable", value, ""), "editable", value, "", UnsupportedEntry{}
-	}
 
 	return "", "", "", "", UnsupportedEntry{Text: text, Reason: fmt.Sprintf("uv.lock package %q uses unsupported source shape", name)}
 }

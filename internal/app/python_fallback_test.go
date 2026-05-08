@@ -498,6 +498,42 @@ func TestRunPRMixedPEP621AndPoetryPrefersPEP621Target(t *testing.T) {
 	}
 }
 
+func TestRunPRMixedPEP621PoetryAndUvPrefersPyProjectWithUvLockfile(t *testing.T) {
+	client := newMixedPEP621PoetryUvFakeGitHubClient()
+
+	stdout, _, err := runPRWithClient(t, client, RunPROptions{ListTargets: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(stdout, "manager=pyproject") || strings.Contains(stdout, "manager=poetry") {
+		t.Fatalf("expected mixed pyproject.toml to prefer PEP 621 target without Poetry ambiguity, got %q", stdout)
+	}
+	if !strings.Contains(stdout, "lockfile: uv.lock") || strings.Contains(stdout, "lockfile: poetry.lock") {
+		t.Fatalf("expected mixed pyproject.toml to attach uv.lock only, got %q", stdout)
+	}
+
+	stdout, _, err = runPRWithClient(t, client, RunPROptions{Format: "json", Paths: []string{"pyproject.toml"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload := decodeJSONReport(t, stdout)
+	change := findChange(t, payload, "requests")
+	if change.ToVersion != "2.32.3" {
+		t.Fatalf("expected uv.lock to enrich mixed PEP 621 target, got %#v", change)
+	}
+	if len(payload.Targets) != 1 || payload.Targets[0].Target.ManifestPath != "pyproject.toml" || payload.Targets[0].Target.LockfilePath != "uv.lock" {
+		t.Fatalf("expected single pyproject target with uv.lock, got %#v", payload.Targets)
+	}
+	if !hasNote(payload.Notes, analysis.NoteUnsupportedDependency) {
+		t.Fatalf("expected Poetry table unsupported note on mixed PEP 621 path, got %#v", payload.Notes)
+	}
+	for _, change := range payload.Changes {
+		if change.Name == "flask" {
+			t.Fatalf("did not expect Poetry dependency to be analyzed through mixed PEP 621 target, got %#v", payload.Changes)
+		}
+	}
+}
+
 func TestRunPRUvPyProjectListTargetsShowsLockfile(t *testing.T) {
 	client := newUvPyProjectFakeGitHubClient(
 		pep621PyProject([]string{}),
@@ -941,6 +977,45 @@ flask = "^3.0"
 	client.filesByKey[fileKey("pyproject.toml", "head-sha")] = []byte(head)
 	client.filesByKey[fileKey("poetry.lock", "base-sha")] = []byte("")
 	client.filesByKey[fileKey("poetry.lock", "head-sha")] = []byte(poetryLock(map[string]string{"flask": "3.0.3"}, nil))
+	return client
+}
+
+func newMixedPEP621PoetryUvFakeGitHubClient() *fakeGitHubClient {
+	client := newPythonBaseFakeGitHubClient()
+	base := `[project]
+dependencies = []
+
+[tool.poetry]
+name = "demo"
+version = "0.1.0"
+
+[tool.poetry.dependencies]
+python = "^3.12"
+`
+	head := `[project]
+dependencies = ["requests>=2.32"]
+
+[tool.poetry]
+name = "demo"
+version = "0.1.0"
+
+[tool.poetry.dependencies]
+python = "^3.12"
+flask = "^3.0"
+`
+	client.files = []ghclient.PullRequestFile{
+		{Filename: "pyproject.toml", Status: "modified"},
+		{Filename: "poetry.lock", Status: "modified"},
+		{Filename: "uv.lock", Status: "modified"},
+	}
+	client.repositoryFilesByRef["base-sha"] = []string{"pyproject.toml", "poetry.lock", "uv.lock"}
+	client.repositoryFilesByRef["head-sha"] = []string{"pyproject.toml", "poetry.lock", "uv.lock"}
+	client.filesByKey[fileKey("pyproject.toml", "base-sha")] = []byte(base)
+	client.filesByKey[fileKey("pyproject.toml", "head-sha")] = []byte(head)
+	client.filesByKey[fileKey("poetry.lock", "base-sha")] = []byte("")
+	client.filesByKey[fileKey("poetry.lock", "head-sha")] = []byte(poetryLock(map[string]string{"flask": "3.0.3"}, nil))
+	client.filesByKey[fileKey("uv.lock", "base-sha")] = []byte("")
+	client.filesByKey[fileKey("uv.lock", "head-sha")] = []byte(uvLock(map[string]string{"requests": "2.32.3"}))
 	return client
 }
 

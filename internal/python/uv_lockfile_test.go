@@ -38,6 +38,16 @@ version = "0.1.0"
 source = { git = "https://github.com/example/git-lib.git", rev = "abc123" }
 
 [[package]]
+name = "tag-lib"
+version = "0.1.1"
+source = { git = "https://github.com/example/tag-lib.git", tag = "v0.1.1" }
+
+[[package]]
+name = "branch-lib"
+version = "0.1.2"
+source = { git = "https://github.com/example/branch-lib.git", branch = "main" }
+
+[[package]]
 name = "url-lib"
 version = "0.2.0"
 source = { url = "https://example.com/url-lib.whl" }
@@ -50,12 +60,7 @@ source = { path = "../path-lib", editable = true }
 [[package]]
 name = "dir-lib"
 version = "0.4.0"
-source = { directory = "../dir-lib" }
-
-[[package]]
-name = "editable-lib"
-version = "0.5.0"
-source = { editable = "../editable-lib" }
+source = { directory = "../dir-lib", editable = true }
 
 [[package]]
 name = "virtual-project"
@@ -71,11 +76,12 @@ source = { workspace = true }
 		t.Fatal(err)
 	}
 	wantSources := map[string]string{
-		"git-lib":      "git:https://github.com/example/git-lib.git#rev=abc123",
-		"url-lib":      "url:https://example.com/url-lib.whl",
-		"path-lib":     "path:../path-lib#editable=true",
-		"dir-lib":      "directory:../dir-lib",
-		"editable-lib": "editable:../editable-lib",
+		"git-lib":    "git:https://github.com/example/git-lib.git#rev=abc123",
+		"tag-lib":    "git:https://github.com/example/tag-lib.git#tag=v0.1.1",
+		"branch-lib": "git:https://github.com/example/branch-lib.git#branch=main",
+		"url-lib":    "url:https://example.com/url-lib.whl",
+		"path-lib":   "path:../path-lib#editable=true",
+		"dir-lib":    "directory:../dir-lib#editable=true",
 	}
 	for name, want := range wantSources {
 		if got := lockfilePackage(t, lockfile, name).Source; got != want {
@@ -89,21 +95,35 @@ source = { workspace = true }
 	}
 }
 
-func TestParseUvLockfileUnknownSourceShapeIsUnsupported(t *testing.T) {
-	lockfile, err := ParseUvLockfile([]byte(`
+func TestParseUvLockfileUnsupportedSourceShapesAreUnsupported(t *testing.T) {
+	tests := []struct {
+		name   string
+		source string
+	}{
+		{name: "standalone editable string", source: `{ editable = "bad-type" }`},
+		{name: "standalone editable bool", source: `{ editable = true }`},
+		{name: "unknown source", source: `{ unknown = "value" }`},
+		{name: "multiple unsupported keys", source: `{ unknown = "value", other = "value" }`},
+		{name: "mixed supported and unsupported keys", source: `{ git = "https://github.com/example/bad-source.git", unexpected = "value" }`},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			lockfile, err := ParseUvLockfile([]byte(`
 [[package]]
 name = "bad-source"
 version = "1.0.0"
-source = { unknown = "value" }
+source = ` + test.source + `
 `))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(lockfile.Packages) != 1 || lockfile.Packages[0].Source != "" {
-		t.Fatalf("expected package version to remain without guessed source, got %#v", lockfile.Packages)
-	}
-	if len(lockfile.Unsupported) != 1 || !strings.Contains(lockfile.Unsupported[0].Reason, "unsupported source shape") {
-		t.Fatalf("expected unsupported source shape note, got %#v", lockfile.Unsupported)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(lockfile.Packages) != 1 || lockfile.Packages[0].Source != "" {
+				t.Fatalf("expected package version to remain without guessed source, got %#v", lockfile.Packages)
+			}
+			if len(lockfile.Unsupported) != 1 || !strings.Contains(lockfile.Unsupported[0].Reason, "unsupported source shape") {
+				t.Fatalf("expected unsupported source shape note, got %#v", lockfile.Unsupported)
+			}
+		})
 	}
 }
 
@@ -126,8 +146,8 @@ func TestParseUvLockfileMalformedTOMLReturnsClearError(t *testing.T) {
 
 func TestParseUvLockfileNoPackagesIsUnsupported(t *testing.T) {
 	lockfile, err := ParseUvLockfile([]byte(`
-version = 1
-revision = 2
+version = "1"
+revision = "2"
 `))
 	if err != nil {
 		t.Fatal(err)
