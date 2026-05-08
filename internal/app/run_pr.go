@@ -111,9 +111,9 @@ func RunPR(ctx context.Context, deps RunPRDependencies, opts RunPROptions) error
 	inputs := make([]analysis.Input, 0, len(resolvedTargets))
 	localInputs := make([]analysis.LocalInput, 0)
 	for _, target := range resolvedTargets {
-		reviewChanges := append([]analysis.ReviewChange(nil), reviewSnapshot.TargetChanges[target.Key()]...)
+		reviewChanges := append([]analysis.ReviewChange(nil), reviewChangesForTarget(reviewSnapshot.TargetChanges, target)...)
 		if !reviewSnapshot.Available && !target.LocalFallback {
-			return &ExitError{Code: 1, Err: fmt.Errorf("dependency review is unavailable and %s cannot be analyzed with local fallback in this release. Pass a PR from a repository where GitHub dependency review is enabled, or narrow to an npm/pnpm/yarn/python direct/poetry target with a supported manifest", target.ManifestPath)}
+			return &ExitError{Code: 1, Err: fmt.Errorf("dependency review is unavailable and %s cannot be analyzed with local fallback in this release. Pass a PR from a repository where GitHub dependency review is enabled, or narrow to an npm/pnpm/yarn/bun/python direct/poetry target with a supported manifest", target.ManifestPath)}
 		}
 		if shouldUsePythonLocalFallback(target, reviewSnapshot.Available) {
 			input, err := loadPythonLocalInput(ctx, cache, pr.BaseSHA, pr.HeadSHA, target)
@@ -125,6 +125,14 @@ func RunPR(ctx context.Context, deps RunPRDependencies, opts RunPROptions) error
 		}
 		if shouldUseGoLocalFallback(target, reviewSnapshot.Available) {
 			input, err := loadGoLocalInput(ctx, cache, pr.BaseSHA, pr.HeadSHA, target)
+			if err != nil {
+				return &ExitError{Code: 1, Err: err}
+			}
+			localInputs = append(localInputs, input)
+			continue
+		}
+		if shouldUseBunLocalFallback(target, reviewSnapshot.Available) {
+			input, err := loadBunLocalInput(ctx, cache, pr.BaseSHA, pr.HeadSHA, target)
 			if err != nil {
 				return &ExitError{Code: 1, Err: err}
 			}
@@ -369,7 +377,7 @@ func loadLocalTargetData(ctx context.Context, cache *repoDataCache, baseSHA, hea
 	if !target.LocalFallback || strings.TrimSpace(target.LockfilePath) == "" {
 		return baseManifest, headManifest, nil, nil, nil
 	}
-	if dependencyReviewAvailable && isYarnBerryTarget(target) {
+	if dependencyReviewAvailable && (isYarnBerryTarget(target) || isBunTarget(target)) {
 		return baseManifest, headManifest, nil, nil, nil
 	}
 

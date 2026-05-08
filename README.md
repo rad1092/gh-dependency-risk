@@ -26,6 +26,9 @@ fallback. An asciinema-compatible recording is also checked in at
   - yarn: `package.json`, classic or modern `yarn.lock`; Yarn Berry / modern
     Yarn fallback is direct-dependency only and does not parse `.pnp.cjs` or
     reconstruct the PnP graph
+  - Bun: `package.json` direct dependencies with matching text `bun.lock`
+    entries; `bun.lockb` is unsupported, with no resolver or full graph
+    reconstruction
   - Python: `requirements.txt`, PEP 621 `pyproject.toml`, and Poetry
     `pyproject.toml` direct dependency declarations; Poetry may use
     `poetry.lock` and PEP 621 may use `uv.lock` to enrich direct resolved
@@ -36,7 +39,7 @@ fallback. An asciinema-compatible recording is also checked in at
 - one Go binary
 - dependency review API first, local fallback only when dependency review is
   unavailable
-- no server, webhook receiver, GitHub App, DB, queue, dashboard, bun, or
+- no server, webhook receiver, GitHub App, DB, queue, dashboard, or
   broad local fallback beyond the narrow JavaScript, Python, and Go module
   static-file fallback in this release
 
@@ -292,6 +295,7 @@ The score model stays heuristic, deterministic, and intentionally auditable.
 | pnpm | Dependency Review data is used when available. | Local fallback analyzes `package.json`, `pnpm-lock.yaml`, and `pnpm-workspace.yaml` discovery. |
 | Yarn Classic | Dependency Review data is used when available. | Local fallback analyzes `package.json` and classic `yarn.lock`. |
 | Yarn Berry / modern Yarn | Dependency Review data is used when available. | Local fallback compares direct `package.json` declarations with matching modern `yarn.lock` entries. `.yarnrc.yml` is used for detection/nodeLinker notes only; no `.pnp.cjs`, cache archive inspection, Yarn command execution, registry lookup, or full PnP graph reconstruction. |
+| Bun | Dependency Review data is used when available. | Local fallback compares direct `package.json` declarations with matching text `bun.lock` entries. `bun.lockb` is unsupported; no Bun/npm/node execution, registry lookup, or full dependency graph reconstruction. |
 | Python `requirements.txt` / PEP 621 `pyproject.toml` + optional `uv.lock` / Poetry `pyproject.toml` + optional `poetry.lock` | Dependency Review data is used when available. | Local fallback compares direct dependency declarations and can use `uv.lock` or `poetry.lock` to enrich matching direct resolved versions and source metadata. No resolver, broad lockfile support, or full transitive analysis. |
 | Go modules | Dependency Review data is used when available. | Local fallback analyzes static `go.mod` `require`/`replace` changes. `go.sum` is checksum evidence only; no resolver, full module graph, `go list`, or `go mod` execution. |
 | Cargo, Composer, Maven, RubyGems, SwiftPM | Dependency Review data may be surfaced when GitHub provides it. | No local fallback in this release. |
@@ -314,8 +318,11 @@ Supported target shapes:
 - Yarn root projects with `package.json` and classic or modern `yarn.lock`
 - Yarn workspaces discovered from `package.json` workspaces and a shared root
   `yarn.lock`
+- Bun root projects with `package.json` and text `bun.lock`
+- Bun workspaces discovered from `package.json` workspaces and a shared root
+  text `bun.lock`
 - nested standalone subprojects with their own `package.json` and either
-  `package-lock.json`, `pnpm-lock.yaml`, or `yarn.lock`
+  `package-lock.json`, `pnpm-lock.yaml`, `yarn.lock`, or `bun.lock`
 - Python `requirements.txt` direct dependency declarations
 - PEP 621 `pyproject.toml` direct dependencies from `[project].dependencies`
   and `[project.optional-dependencies]`, with optional `uv.lock` direct
@@ -365,6 +372,15 @@ Notes:
 - Yarn Berry protocols such as `workspace:`, `portal:`, `link:`, `file:`,
   `patch:`, git, and HTTP(S) sources are surfaced as conservative notes/source
   validation signals when tied to changed direct dependencies
+- Bun local fallback is static and direct-only: it reads `package.json` and
+  matching text `bun.lock` entries without running `bun`, `npm`, or `node`
+- Bun `bun.lockb` binary lockfiles are not parsed in this phase, and
+  `bun.lockb`-only changes remain unsupported/no meaningful dependency change
+- Bun transitive-only and checksum-only lockfile updates do not create
+  dependency-change report entries
+- Bun `workspace:`, `file:`, `link:`, git, GitHub, and HTTP(S) sources are
+  surfaced as conservative source validation notes/actions only when tied to
+  changed direct dependencies
 - large lockfiles served by the GitHub contents API without inline content are
   still fetched through the corresponding blob object instead of failing early
 - if a lockfile-only workspace change cannot be mapped exactly, the report calls
@@ -418,7 +434,8 @@ Notes:
   when the target also has a meaningful `require` or `replace` result
 - `go.sum` is not treated as a lockfile or dependency tree, so `go.sum`-only
   checksum changes do not create dependency-change report entries
-- out of scope for now: bun, `package.json5`, `package.yaml`, pnpm catalogs,
+- out of scope for now: `bun.lockb`, Bun resolver/workspace graph semantics,
+  `package.json5`, `package.yaml`, pnpm catalogs,
   pnpm branch lockfiles, broad non-JS resolver-style fallback, Go module graph
   reconstruction, and full Yarn Plug'n'Play graph resolution
 

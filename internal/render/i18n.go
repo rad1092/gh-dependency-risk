@@ -172,6 +172,9 @@ func localizeNote(note analysis.Note, lang string) string {
 		if text, ok := localizeYarnNoteKorean(note); ok {
 			return text
 		}
+		if text, ok := localizeBunNoteKorean(note); ok {
+			return text
+		}
 	}
 	if lang == "en" {
 		switch note.Code {
@@ -211,6 +214,14 @@ func localizeNote(note analysis.Note, lang string) string {
 			return fmt.Sprintf("Yarn dependency %s uses a git source: %s", note.Dependency, note.Detail)
 		case analysis.NoteYarnChecksumChanged:
 			return fmt.Sprintf("Yarn checksum evidence changed for %s: %s", note.Dependency, note.Detail)
+		case analysis.NoteBunLockfile:
+			return fmt.Sprintf("Bun lockfile fallback was used: %s", note.Detail)
+		case analysis.NoteBunWorkspaceProtocol:
+			return fmt.Sprintf("Bun dependency %s uses the workspace protocol: %s", note.Dependency, note.Detail)
+		case analysis.NoteBunChecksumChanged:
+			return fmt.Sprintf("Bun checksum evidence changed for %s: %s", note.Dependency, note.Detail)
+		case analysis.NoteBunBinaryLockfile:
+			return fmt.Sprintf("Bun binary lockfile is unsupported by local fallback: %s", note.Detail)
 		default:
 			return note.Code
 		}
@@ -260,6 +271,21 @@ func localizeYarnNoteKorean(note analysis.Note) (string, bool) {
 		return fmt.Sprintf("Yarn 의존성 %s가 git 소스를 사용합니다: %s", note.Dependency, note.Detail), true
 	case analysis.NoteYarnChecksumChanged:
 		return fmt.Sprintf("Yarn checksum 근거가 변경되었습니다(%s): %s", note.Dependency, note.Detail), true
+	default:
+		return "", false
+	}
+}
+
+func localizeBunNoteKorean(note analysis.Note) (string, bool) {
+	switch note.Code {
+	case analysis.NoteBunLockfile:
+		return fmt.Sprintf("Bun lockfile fallback을 사용했습니다: %s", note.Detail), true
+	case analysis.NoteBunWorkspaceProtocol:
+		return fmt.Sprintf("Bun 의존성 %s가 workspace 프로토콜을 사용합니다: %s", note.Dependency, note.Detail), true
+	case analysis.NoteBunChecksumChanged:
+		return fmt.Sprintf("Bun checksum 근거가 변경되었습니다(%s): %s", note.Dependency, note.Detail), true
+	case analysis.NoteBunBinaryLockfile:
+		return fmt.Sprintf("Bun binary lockfile은 local fallback에서 지원되지 않습니다: %s", note.Detail), true
 	default:
 		return "", false
 	}

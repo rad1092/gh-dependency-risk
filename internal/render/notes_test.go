@@ -197,6 +197,49 @@ func TestRenderYarnBerryFallbackNotesAreReadable(t *testing.T) {
 	}
 }
 
+func TestRenderBunFallbackNotesAreReadable(t *testing.T) {
+	report := noteReport()
+	report.Analysis.Notes = []analysis.Note{
+		{Code: analysis.NoteBunLockfile, Detail: "bun.lock"},
+		{Code: analysis.NoteBunWorkspaceProtocol, Dependency: "workspace-lib", Detail: "workspace:*"},
+		{Code: analysis.NoteBunChecksumChanged, Dependency: "left-pad", Detail: "checksum old -> new"},
+		{Code: analysis.NoteBunBinaryLockfile, Detail: "bun.lockb"},
+	}
+
+	englishMarkdown, err := Render(report, "markdown", "en")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, expected := range []string{
+		"Bun lockfile fallback was used",
+		"uses the workspace protocol",
+		"Bun checksum evidence changed",
+		"Bun binary lockfile is unsupported",
+	} {
+		if !strings.Contains(englishMarkdown, expected) {
+			t.Fatalf("expected English Bun note %q, got %q", expected, englishMarkdown)
+		}
+	}
+
+	koreanMarkdown, err := Render(report, "markdown", "ko")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, raw := range []string{
+		analysis.NoteBunLockfile,
+		analysis.NoteBunWorkspaceProtocol,
+		analysis.NoteBunChecksumChanged,
+		analysis.NoteBunBinaryLockfile,
+	} {
+		if strings.Contains(koreanMarkdown, raw) {
+			t.Fatalf("did not expect Korean output to expose raw note code %q, got %q", raw, koreanMarkdown)
+		}
+	}
+	if !strings.Contains(koreanMarkdown, "Bun") || !strings.Contains(koreanMarkdown, "workspace-lib") {
+		t.Fatalf("expected readable Korean Bun notes, got %q", koreanMarkdown)
+	}
+}
+
 func noteReport() Report {
 	return Report{
 		Repo: "owner/repo",

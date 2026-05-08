@@ -95,6 +95,10 @@ const (
 	NoteYarnFileProtocol         = "yarn_file_protocol"
 	NoteYarnGitSource            = "yarn_git_source"
 	NoteYarnChecksumChanged      = "yarn_checksum_changed"
+	NoteBunLockfile              = "bun_lockfile"
+	NoteBunWorkspaceProtocol     = "bun_workspace_protocol"
+	NoteBunChecksumChanged       = "bun_checksum_changed"
+	NoteBunBinaryLockfile        = "bun_binary_lockfile_unsupported"
 )
 
 type AnalysisTarget struct {

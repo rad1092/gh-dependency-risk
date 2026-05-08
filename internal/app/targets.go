@@ -152,6 +152,8 @@ func discoverJSTargets(ctx context.Context, cache *repoDataCache, baseRef, headR
 	pnpmLockfilePaths := pathSet(unionPaths(filterPaths(baseFiles, "pnpm-lock.yaml"), filterPaths(headFiles, "pnpm-lock.yaml")))
 	yarnLockfilePaths := pathSet(unionPaths(filterPaths(baseFiles, "yarn.lock"), filterPaths(headFiles, "yarn.lock")))
 	yarnRCPaths := pathSet(unionPaths(filterPaths(baseFiles, ".yarnrc.yml"), filterPaths(headFiles, ".yarnrc.yml")))
+	bunLockfilePaths := pathSet(unionPaths(filterPaths(baseFiles, "bun.lock"), filterPaths(headFiles, "bun.lock")))
+	bunBinaryLockfilePaths := pathSet(unionPaths(filterPaths(baseFiles, "bun.lockb"), filterPaths(headFiles, "bun.lockb")))
 	pnpmWorkspacePaths := unionPaths(filterPaths(baseFiles, "pnpm-workspace.yaml"), filterPaths(headFiles, "pnpm-workspace.yaml"))
 	manifestCache := map[string][2]*npm.PackageManifest{}
 	for _, manifestPath := range manifestPaths {
@@ -235,6 +237,27 @@ func discoverJSTargets(ctx context.Context, cache *repoDataCache, baseRef, headR
 				continue
 			}
 			yarnWorkspaceRoots[candidate] = rootDir
+		}
+	}
+
+	bunWorkspaceRoots := map[string]string{}
+	for _, manifestPath := range manifestPaths {
+		patterns := workspacePatterns(manifestCache[manifestPath][0], manifestCache[manifestPath][1])
+		if len(patterns) == 0 {
+			continue
+		}
+		rootDir := manifestDir(manifestPath)
+		if !hasBunSignal(manifestCache[manifestPath], rootDir, bunLockfilePaths, bunBinaryLockfilePaths) {
+			continue
+		}
+		for _, candidate := range manifestPaths {
+			if candidate == manifestPath {
+				continue
+			}
+			if !matchesWorkspaceTarget(rootDir, patterns, candidate) {
+				continue
+			}
+			bunWorkspaceRoots[candidate] = rootDir
 		}
 	}
 
@@ -330,6 +353,33 @@ func discoverJSTargets(ctx context.Context, cache *repoDataCache, baseRef, headR
 				PackageManager:  yarnManager,
 				Ecosystem:       string(review.EcosystemYarn),
 				TargetID:        review.TargetIdentity(manifestPath, review.EcosystemYarn, review.PackageManagerYarn),
+				OwningDirectory: dir,
+				LocalFallback:   true,
+			})
+		}
+
+		if workspaceRoot, ok := bunWorkspaceRoots[manifestPath]; ok {
+			grouped[manifestPath] = append(grouped[manifestPath], analysis.AnalysisTarget{
+				DisplayName:       displayNameForManifest(manifestPath),
+				ManifestPath:      manifestPath,
+				LockfilePath:      bunLockfileForDir(workspaceRoot, bunLockfilePaths, bunBinaryLockfilePaths),
+				Kind:              analysis.TargetKindWorkspace,
+				WorkspaceRootPath: workspaceRoot,
+				PackageManager:    packageManagerBun,
+				Ecosystem:         string(review.EcosystemNPM),
+				TargetID:          review.TargetIdentity(manifestPath, review.EcosystemNPM, review.PackageManager(packageManagerBun)),
+				OwningDirectory:   dir,
+				LocalFallback:     true,
+			})
+		} else if hasBunSignal(manifestCache[manifestPath], dir, bunLockfilePaths, bunBinaryLockfilePaths) {
+			grouped[manifestPath] = append(grouped[manifestPath], analysis.AnalysisTarget{
+				DisplayName:     displayNameForManifest(manifestPath),
+				ManifestPath:    manifestPath,
+				LockfilePath:    bunLockfileForDir(dir, bunLockfilePaths, bunBinaryLockfilePaths),
+				Kind:            kindForManifest(manifestPath),
+				PackageManager:  packageManagerBun,
+				Ecosystem:       string(review.EcosystemNPM),
+				TargetID:        review.TargetIdentity(manifestPath, review.EcosystemNPM, review.PackageManager(packageManagerBun)),
 				OwningDirectory: dir,
 				LocalFallback:   true,
 			})
@@ -778,6 +828,34 @@ func yarnLockfilePathForDir(dir string) string {
 	return cleaned + "/yarn.lock"
 }
 
+func bunLockfilePathForDir(dir string) string {
+	cleaned := normalizeRepoPath(dir)
+	if cleaned == "" {
+		return "bun.lock"
+	}
+	return cleaned + "/bun.lock"
+}
+
+func bunBinaryLockfilePathForDir(dir string) string {
+	cleaned := normalizeRepoPath(dir)
+	if cleaned == "" {
+		return "bun.lockb"
+	}
+	return cleaned + "/bun.lockb"
+}
+
+func bunLockfileForDir(dir string, bunLockfilePaths, bunBinaryLockfilePaths map[string]struct{}) string {
+	text := bunLockfilePathForDir(dir)
+	if _, ok := bunLockfilePaths[text]; ok {
+		return text
+	}
+	binary := bunBinaryLockfilePathForDir(dir)
+	if _, ok := bunBinaryLockfilePaths[binary]; ok {
+		return binary
+	}
+	return ""
+}
+
 func poetryLockfilePathForDir(dir string) string {
 	cleaned := normalizeRepoPath(dir)
 	if cleaned == "" {
@@ -883,6 +961,9 @@ func (t discoveredTarget) ambiguous() bool {
 func (t discoveredTarget) lockfiles() []string {
 	lockfiles := make([]string, 0, len(t.Variants))
 	for _, variant := range t.Variants {
+		if variant.LockfilePath == "" {
+			continue
+		}
 		lockfiles = append(lockfiles, variant.LockfilePath)
 	}
 	sort.Strings(lockfiles)
@@ -927,8 +1008,10 @@ func (t discoveredTarget) directory() string {
 
 func targetIsChanged(target discoveredTarget, changed map[string]struct{}, reviewChanges map[string][]analysis.ReviewChange) bool {
 	for _, variant := range target.Variants {
-		if len(reviewChanges[variant.Key()]) > 0 {
-			return true
+		for _, key := range reviewChangeKeysForTarget(variant) {
+			if len(reviewChanges[key]) > 0 {
+				return true
+			}
 		}
 	}
 	if _, ok := changed[target.ManifestPath]; ok {
@@ -954,10 +1037,23 @@ func resolveTargetVariant(target discoveredTarget, changed map[string]struct{}, 
 		}
 		reviewVariants = append(reviewVariants, variant)
 	}
-	switch len(reviewVariants) {
-	case 1:
+	if len(reviewVariants) == 1 {
 		return reviewVariants[0], nil
-	case 2, 3:
+	}
+	if len(reviewVariants) > 1 {
+		return analysis.AnalysisTarget{}, fmt.Errorf("target %q is ambiguous because multiple supported ecosystems or package managers changed for the same manifest (%s). Keep only one lockfile/manager per target or narrow the PR before rerunning", target.ManifestPath, strings.Join(target.packageManagers(), ", "))
+	}
+
+	for _, variant := range target.Variants {
+		if len(reviewChangesForTarget(reviewChanges, variant)) == 0 {
+			continue
+		}
+		reviewVariants = append(reviewVariants, variant)
+	}
+	if len(reviewVariants) == 1 {
+		return reviewVariants[0], nil
+	}
+	if len(reviewVariants) > 1 {
 		return analysis.AnalysisTarget{}, fmt.Errorf("target %q is ambiguous because multiple supported ecosystems or package managers changed for the same manifest (%s). Keep only one lockfile/manager per target or narrow the PR before rerunning", target.ManifestPath, strings.Join(target.packageManagers(), ", "))
 	}
 
@@ -978,6 +1074,25 @@ func resolveTargetVariant(target discoveredTarget, changed map[string]struct{}, 
 	default:
 		return analysis.AnalysisTarget{}, fmt.Errorf("target %q is ambiguous because multiple supported lockfiles changed in the same directory (%s). Keep only one package manager lockfile per target or narrow the PR before rerunning", target.ManifestPath, strings.Join(target.lockfiles(), ", "))
 	}
+}
+
+func reviewChangesForTarget(reviewChanges map[string][]analysis.ReviewChange, target analysis.AnalysisTarget) []analysis.ReviewChange {
+	var result []analysis.ReviewChange
+	for _, key := range reviewChangeKeysForTarget(target) {
+		result = append(result, reviewChanges[key]...)
+	}
+	return result
+}
+
+func reviewChangeKeysForTarget(target analysis.AnalysisTarget) []string {
+	keys := []string{target.Key()}
+	if target.PackageManager == packageManagerBun {
+		npmKey := review.TargetIdentity(target.ManifestPath, review.EcosystemNPM, review.PackageManagerNPM)
+		if npmKey != target.Key() {
+			keys = append(keys, npmKey)
+		}
+	}
+	return keys
 }
 
 func managerLabel(target analysis.AnalysisTarget) string {
