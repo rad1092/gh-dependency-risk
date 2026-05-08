@@ -17,6 +17,7 @@ type yarnBerryDirectState struct {
 	Dependencies []analysis.LocalDependency
 	Entries      map[string]npm.YarnBerryEntry
 	Requirements map[string]string
+	Unsupported  []npm.YarnBerryUnsupportedEntry
 }
 
 func hasYarnBerrySignal(manifests [2]*npm.PackageManifest, dir string, yarnRCPaths map[string]struct{}) bool {
@@ -106,7 +107,7 @@ func buildYarnBerryLocalInput(target analysis.AnalysisTarget, baseManifest, head
 	changed := changedYarnBerryDependencies(baseState.Dependencies, headState.Dependencies)
 	notes := yarnBerryNotes(target, baseState, headState, baseYarnRC, headYarnRC, changed)
 
-	unsupported := convertYarnBerryUnsupported(target.LockfilePath, baseLockfile.Unsupported, headLockfile.Unsupported)
+	unsupported := convertYarnBerryUnsupported(target.LockfilePath, baseLockfile.Unsupported, headLockfile.Unsupported, baseState.Unsupported, headState.Unsupported)
 	unsupported = append(unsupported, convertYarnBerryUnsupported(yarnRCPath, baseYarnRC.Unsupported, headYarnRC.Unsupported)...)
 	return analysis.LocalInput{
 		Target:                    target,
@@ -133,7 +134,8 @@ func yarnBerryDirectDependencies(manifest *npm.PackageManifest, lockfile npm.Yar
 			continue
 		}
 		requirement := manifest.Requirement(name)
-		entry, entryOK := lockfile.FindEntry(name, requirement)
+		entry, entryOK, unsupported := lockfile.ResolveDirectEntry(name, requirement)
+		state.Unsupported = append(state.Unsupported, unsupported...)
 		dependency := analysis.LocalDependency{
 			Name:        name,
 			Requirement: requirement,
@@ -286,7 +288,7 @@ func convertYarnBerryUnsupported(manifest string, groups ...[]npm.YarnBerryUnsup
 }
 
 func yarnBerryProjectRootDir(target analysis.AnalysisTarget) string {
-	if target.WorkspaceRootPath != "" {
+	if target.Kind == analysis.TargetKindWorkspace {
 		return target.WorkspaceRootPath
 	}
 	return target.Directory()

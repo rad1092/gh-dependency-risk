@@ -356,6 +356,9 @@ Notes:
 - Yarn Berry / modern Yarn local fallback is static and direct-only: it reads
   `package.json`, matching modern `yarn.lock` entries, and optional
   `.yarnrc.yml` `nodeLinker` settings without running `yarn`, `npm`, or `node`
+- if multiple same-name Yarn Berry lockfile entries exist without an exact
+  descriptor/range match for a direct dependency, local fallback does not guess
+  a resolved version and records an unsupported-entry note
 - Yarn Berry / modern Yarn local fallback ignores transitive-only lockfile
   updates, checksum-only updates, `.pnp.cjs`, PnP loader files, cache archives,
   plugins, constraints, and full PnP graph reconstruction

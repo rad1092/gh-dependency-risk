@@ -48,6 +48,138 @@ __metadata:
 	}
 }
 
+func TestYarnBerryResolveDirectEntryExactMatchBeatsSameNameCandidates(t *testing.T) {
+	lockfile, err := ParseYarnBerryLockfile([]byte(`
+__metadata:
+  version: 8
+
+"left-pad@npm:^1.0.0":
+  version: 1.0.1
+  resolution: "left-pad@npm:1.0.1"
+
+"left-pad@npm:^2.0.0":
+  version: 2.0.0
+  resolution: "left-pad@npm:2.0.0"
+`))
+	if err != nil {
+		t.Fatalf("parse Yarn Berry lockfile: %v", err)
+	}
+	entry, ok, unsupported := lockfile.ResolveDirectEntry("left-pad", "^2.0.0")
+	if !ok || entry.Version != "2.0.0" || len(unsupported) != 0 {
+		t.Fatalf("expected exact match for ^2.0.0, got entry=%#v ok=%v unsupported=%#v", entry, ok, unsupported)
+	}
+}
+
+func TestYarnBerryResolveDirectEntryAmbiguousSameNameDoesNotGuess(t *testing.T) {
+	lockfile, err := ParseYarnBerryLockfile([]byte(`
+__metadata:
+  version: 8
+
+"left-pad@npm:^1.0.0":
+  version: 1.0.1
+  resolution: "left-pad@npm:1.0.1"
+
+"left-pad@npm:^2.0.0":
+  version: 2.0.0
+  resolution: "left-pad@npm:2.0.0"
+`))
+	if err != nil {
+		t.Fatalf("parse Yarn Berry lockfile: %v", err)
+	}
+	entry, ok, unsupported := lockfile.ResolveDirectEntry("left-pad", "^3.0.0")
+	if ok || entry.Version != "" || len(unsupported) != 1 {
+		t.Fatalf("expected ambiguous same-name match to stay unresolved, got entry=%#v ok=%v unsupported=%#v", entry, ok, unsupported)
+	}
+	if unsupported[0].Reason != "ambiguous Yarn Berry lockfile entries for direct dependency" {
+		t.Fatalf("unexpected unsupported reason: %#v", unsupported)
+	}
+}
+
+func TestYarnBerryResolveDirectEntryVirtualCandidateKeepsNameFallbackAmbiguous(t *testing.T) {
+	lockfile, err := ParseYarnBerryLockfile([]byte(`
+__metadata:
+  version: 8
+
+"left-pad@npm:^1.0.0":
+  version: 1.0.1
+  resolution: "left-pad@npm:1.0.1"
+
+"left-pad@virtual:abc123#npm:^2.0.0":
+  version: 2.0.0
+  resolution: "left-pad@virtual:abc123#npm:^2.0.0"
+`))
+	if err != nil {
+		t.Fatalf("parse Yarn Berry lockfile: %v", err)
+	}
+	entry, ok, unsupported := lockfile.ResolveDirectEntry("left-pad", "^3.0.0")
+	if ok || entry.Version != "" || len(unsupported) != 1 {
+		t.Fatalf("expected virtual same-name candidate to prevent name-only guessing, got entry=%#v ok=%v unsupported=%#v", entry, ok, unsupported)
+	}
+	if unsupported[0].Reason != "ambiguous Yarn Berry lockfile entries for direct dependency" {
+		t.Fatalf("unexpected unsupported reason: %#v", unsupported)
+	}
+}
+
+func TestYarnBerryResolveDirectEntrySingleNameFallback(t *testing.T) {
+	lockfile, err := ParseYarnBerryLockfile([]byte(`
+__metadata:
+  version: 8
+
+"left-pad@npm:^1.0.0":
+  version: 1.0.1
+  resolution: "left-pad@npm:1.0.1"
+`))
+	if err != nil {
+		t.Fatalf("parse Yarn Berry lockfile: %v", err)
+	}
+	entry, ok, unsupported := lockfile.ResolveDirectEntry("left-pad", "^9.0.0")
+	if !ok || entry.Version != "1.0.1" || len(unsupported) != 0 {
+		t.Fatalf("expected single same-name fallback, got entry=%#v ok=%v unsupported=%#v", entry, ok, unsupported)
+	}
+}
+
+func TestParseYarnBerryLockfileDescriptorEdgeCases(t *testing.T) {
+	lockfile, err := ParseYarnBerryLockfile([]byte(`
+__metadata:
+  version: 8
+
+"@scope/pkg@npm:^1.0.0":
+  version: 1.0.1
+  resolution: "@scope/pkg@npm:1.0.1"
+
+"alias-name@npm:real-name@^1.0.0":
+  version: 1.0.1
+  resolution: "alias-name@npm:1.0.1"
+
+"multi@npm:^1.0.0, multi@npm:^1.1.0":
+  version: 1.1.0
+  resolution: "multi@npm:1.1.0"
+
+"virtual-lib@virtual:abc123#npm:^1.0.0":
+  version: 1.0.0
+  resolution: "virtual-lib@virtual:abc123#npm:^1.0.0"
+`))
+	if err != nil {
+		t.Fatalf("parse Yarn Berry lockfile: %v", err)
+	}
+	scoped, ok, unsupported := lockfile.ResolveDirectEntry("@scope/pkg", "^1.0.0")
+	if !ok || scoped.Name != "@scope/pkg" || len(unsupported) != 0 {
+		t.Fatalf("expected scoped package match, got entry=%#v ok=%v unsupported=%#v", scoped, ok, unsupported)
+	}
+	alias, ok, unsupported := lockfile.ResolveDirectEntry("alias-name", "npm:real-name@^1.0.0")
+	if !ok || alias.Name != "alias-name" || len(unsupported) != 0 {
+		t.Fatalf("expected alias declared name match, got entry=%#v ok=%v unsupported=%#v", alias, ok, unsupported)
+	}
+	multi, ok, unsupported := lockfile.ResolveDirectEntry("multi", "^1.1.0")
+	if !ok || multi.Version != "1.1.0" || len(unsupported) != 0 {
+		t.Fatalf("expected comma-separated descriptor match, got entry=%#v ok=%v unsupported=%#v", multi, ok, unsupported)
+	}
+	virtual, ok, unsupported := lockfile.ResolveDirectEntry("virtual-lib", "^1.0.0")
+	if ok || virtual.Version != "" || len(unsupported) != 1 {
+		t.Fatalf("expected virtual descriptor to stay unsupported, got entry=%#v ok=%v unsupported=%#v", virtual, ok, unsupported)
+	}
+}
+
 func TestParseYarnBerryLockfileProtocols(t *testing.T) {
 	lockfile, err := ParseYarnBerryLockfile([]byte(`
 __metadata:

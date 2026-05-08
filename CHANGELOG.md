@@ -4,6 +4,9 @@ All notable changes to `gh-dep-risk` will be documented in this file.
 
 ## Unreleased
 
+- Hardened Yarn Berry local fallback edge cases around ambiguous direct
+  lockfile matching, protocol/source notes, checksum/nodeLinker note gating,
+  and descriptor parsing.
 - Added narrow Yarn Berry / modern Yarn local fallback for direct
   `package.json` declarations matched to modern `yarn.lock` entries when
   Dependency Review is unavailable.

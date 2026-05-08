@@ -7,6 +7,7 @@ import (
 
 	"gh-dep-risk/internal/analysis"
 	ghclient "gh-dep-risk/internal/github"
+	"gh-dep-risk/internal/npm"
 	"github.com/cli/go-gh/v2/pkg/api"
 )
 
@@ -201,6 +202,24 @@ func TestRunPRYarnBerryChecksumOnlyChangeExits2(t *testing.T) {
 	assertExitCode(t, err, 2)
 }
 
+func TestRunPRYarnBerryNodeLinkerOnlyChangeExits2(t *testing.T) {
+	packageJSON := yarnBerryPackageJSON("yarn@4.1.0", map[string]string{"left-pad": "^1.0.0"}, nil, nil)
+	lockfile := yarnBerryLock(`
+"left-pad@npm:^1.0.0":
+  version: 1.0.1
+  resolution: "left-pad@npm:1.0.1"
+`)
+	client := newYarnBerryFakeGitHubClient(packageJSON, packageJSON, lockfile, lockfile)
+	client.repositoryFilesByRef["base-sha"] = append(client.repositoryFilesByRef["base-sha"], ".yarnrc.yml")
+	client.repositoryFilesByRef["head-sha"] = append(client.repositoryFilesByRef["head-sha"], ".yarnrc.yml")
+	client.filesByKey[fileKey(".yarnrc.yml", "base-sha")] = []byte("nodeLinker: node-modules\n")
+	client.filesByKey[fileKey(".yarnrc.yml", "head-sha")] = []byte("nodeLinker: pnp\n")
+	client.files = []ghclient.PullRequestFile{{Filename: ".yarnrc.yml", Status: "modified"}}
+
+	_, _, err := runPRWithClient(t, client, RunPROptions{Format: "json"})
+	assertExitCode(t, err, 2)
+}
+
 func TestRunPRYarnBerryProtocolNotes(t *testing.T) {
 	client := newYarnBerryFakeGitHubClient(
 		yarnBerryPackageJSON("yarn@4.1.0", nil, nil, nil),
@@ -250,6 +269,106 @@ func TestRunPRYarnBerryProtocolNotes(t *testing.T) {
 	}
 }
 
+func TestRunPRYarnBerryNPMAliasDoesNotEmitNonRegistrySource(t *testing.T) {
+	client := newYarnBerryFakeGitHubClient(
+		yarnBerryPackageJSON("yarn@4.1.0", nil, nil, nil),
+		yarnBerryPackageJSON("yarn@4.1.0", map[string]string{"alias-name": "npm:real-name@^1.0.0"}, nil, nil),
+		yarnBerryLock(``),
+		yarnBerryLock(`
+"alias-name@npm:real-name@^1.0.0":
+  version: 1.0.1
+  resolution: "alias-name@npm:1.0.1"
+`),
+	)
+
+	stdout, _, err := runPRWithClient(t, client, RunPROptions{Format: "json"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload := decodeJSONReport(t, stdout)
+	change := findChange(t, payload, "alias-name")
+	if change.Resolved != "" {
+		t.Fatalf("expected npm alias to stay registry-like, got %#v", change)
+	}
+	if hasNote(payload.Notes, analysis.NoteNonRegistrySource) {
+		t.Fatalf("did not expect non-registry note for npm alias, got %#v", payload.Notes)
+	}
+}
+
+func TestRunPRYarnBerryHTTPSourceEmitsNonRegistrySource(t *testing.T) {
+	client := newYarnBerryFakeGitHubClient(
+		yarnBerryPackageJSON("yarn@4.1.0", nil, nil, nil),
+		yarnBerryPackageJSON("yarn@4.1.0", map[string]string{"http-lib": "https://example.com/http-lib.tgz"}, nil, nil),
+		yarnBerryLock(``),
+		yarnBerryLock(`
+"http-lib@https://example.com/http-lib.tgz":
+  version: 1.0.0
+  resolution: "http-lib@https://example.com/http-lib.tgz"
+`),
+	)
+
+	stdout, _, err := runPRWithClient(t, client, RunPROptions{Format: "json"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload := decodeJSONReport(t, stdout)
+	if !hasNote(payload.Notes, analysis.NoteNonRegistrySource) {
+		t.Fatalf("expected non-registry note for http source, got %#v", payload.Notes)
+	}
+	if !containsString(payload.RecommendedActions, analysis.ActionValidateSources) {
+		t.Fatalf("expected validate source action, got %#v", payload.RecommendedActions)
+	}
+}
+
+func TestRunPRYarnBerryAmbiguousDirectLockfileMatchDoesNotGuess(t *testing.T) {
+	client := newYarnBerryFakeGitHubClient(
+		yarnBerryPackageJSON("yarn@4.1.0", nil, nil, nil),
+		yarnBerryPackageJSON("yarn@4.1.0", map[string]string{"left-pad": "^3.0.0"}, nil, nil),
+		yarnBerryLock(``),
+		yarnBerryLock(`
+"left-pad@npm:^1.0.0":
+  version: 1.0.1
+  resolution: "left-pad@npm:1.0.1"
+
+"left-pad@npm:^2.0.0":
+  version: 2.0.0
+  resolution: "left-pad@npm:2.0.0"
+`),
+	)
+
+	stdout, _, err := runPRWithClient(t, client, RunPROptions{Format: "json"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload := decodeJSONReport(t, stdout)
+	change := findChange(t, payload, "left-pad")
+	if change.ToVersion != "" || change.Resolved != "" {
+		t.Fatalf("expected ambiguous lockfile match not to guess version/source, got %#v", change)
+	}
+	note := findNote(t, payload.Notes, analysis.NoteUnsupportedDependency)
+	if !strings.Contains(note.Detail, "ambiguous Yarn Berry lockfile entries for direct dependency") {
+		t.Fatalf("expected ambiguous unsupported note, got %#v", note)
+	}
+}
+
+func TestRunPRYarnBerryTransitiveOnlyProtocolEntryExits2(t *testing.T) {
+	packageJSON := yarnBerryPackageJSON("yarn@4.1.0", nil, nil, nil)
+	client := newYarnBerryFakeGitHubClient(
+		packageJSON,
+		packageJSON,
+		yarnBerryLock(``),
+		yarnBerryLock(`
+"workspace-lib@workspace:*":
+  version: 0.0.0-use.local
+  resolution: "workspace-lib@workspace:*"
+`),
+	)
+	client.files = []ghclient.PullRequestFile{{Filename: "yarn.lock", Status: "modified"}}
+
+	_, _, err := runPRWithClient(t, client, RunPROptions{Format: "json"})
+	assertExitCode(t, err, 2)
+}
+
 func TestRunPRYarnBerryDependencyReviewAvailableDoesNotLoadFallbackFiles(t *testing.T) {
 	client := newYarnBerryFakeGitHubClient(
 		yarnBerryPackageJSON("yarn@4.1.0", nil, nil, nil),
@@ -278,9 +397,73 @@ func TestRunPRYarnBerryDependencyReviewAvailableDoesNotLoadFallbackFiles(t *test
 	if !payload.DependencyReviewAvailable {
 		t.Fatalf("expected dependency review primary path, got %#v", payload)
 	}
+	change := findChange(t, payload, "left-pad")
+	if change.ChangeType != analysis.ChangeAdded || change.ToVersion != "1.0.1" {
+		t.Fatalf("expected Dependency Review Yarn change to be reported, got %#v", change)
+	}
 	for _, key := range client.getFileKeys {
 		if strings.Contains(key, "yarn.lock@") || strings.Contains(key, ".yarnrc.yml@") {
 			t.Fatalf("expected dependency review path not to load Yarn Berry fallback files, got keys %#v", client.getFileKeys)
+		}
+	}
+}
+
+func TestYarnBerryLocalInputGatesChecksumAndNodeLinkerNotes(t *testing.T) {
+	target := analysis.AnalysisTarget{
+		DisplayName:     "root",
+		ManifestPath:    "package.json",
+		LockfilePath:    "yarn.lock",
+		PackageManager:  packageManagerYarnBerry,
+		Ecosystem:       "yarn",
+		OwningDirectory: "",
+		LocalFallback:   true,
+	}
+	manifest := mustParsePackageManifest(t, yarnBerryPackageJSON("yarn@4.1.0", map[string]string{"left-pad": "^1.0.0"}, nil, nil))
+	baseLock := mustParseYarnBerryLock(t, yarnBerryLock(`
+"left-pad@npm:^1.0.0":
+  version: 1.0.1
+  resolution: "left-pad@npm:1.0.1"
+  checksum: 10c0
+`))
+	headChecksumOnly := mustParseYarnBerryLock(t, yarnBerryLock(`
+"left-pad@npm:^1.0.0":
+  version: 1.0.1
+  resolution: "left-pad@npm:1.0.1"
+  checksum: 20c0
+`))
+	input := buildYarnBerryLocalInput(
+		target,
+		manifest,
+		manifest,
+		baseLock,
+		headChecksumOnly,
+		npm.YarnRC{NodeLinker: "node-modules"},
+		npm.YarnRC{NodeLinker: "pnp"},
+		".yarnrc.yml",
+	)
+	if hasNote(input.Notes, analysis.NoteYarnChecksumChanged) || hasNote(input.Notes, analysis.NoteYarnNodeLinker) {
+		t.Fatalf("did not expect checksum/nodeLinker notes without changed direct dependency, got %#v", input.Notes)
+	}
+
+	headUpdated := mustParseYarnBerryLock(t, yarnBerryLock(`
+"left-pad@npm:^1.0.0":
+  version: 2.0.0
+  resolution: "left-pad@npm:2.0.0"
+  checksum: 20c0
+`))
+	input = buildYarnBerryLocalInput(
+		target,
+		manifest,
+		manifest,
+		baseLock,
+		headUpdated,
+		npm.YarnRC{NodeLinker: "node-modules"},
+		npm.YarnRC{NodeLinker: "pnp"},
+		".yarnrc.yml",
+	)
+	for _, code := range []string{analysis.NoteYarnChecksumChanged, analysis.NoteYarnNodeLinker} {
+		if !hasNote(input.Notes, code) {
+			t.Fatalf("expected note %s for direct dependency update, got %#v", code, input.Notes)
 		}
 	}
 }
@@ -316,6 +499,44 @@ func TestRunPRYarnBerryNestedPathFiltering(t *testing.T) {
 	change := findChange(t, decodeJSONReport(t, stdout), "left-pad")
 	if change.Target != "apps/web" || change.Manifest != "apps/web/package.json" {
 		t.Fatalf("expected nested workspace target, got %#v", change)
+	}
+
+	client = newYarnBerryFakeGitHubClient(
+		yarnBerryPackageJSON("yarn@4.1.0", nil, nil, nil),
+		yarnBerryPackageJSON("yarn@4.1.0", nil, nil, nil),
+		yarnBerryLock(``),
+		yarnBerryLock(``),
+	)
+	client.repositoryFilesByRef["base-sha"] = []string{"package.json", "yarn.lock", ".yarnrc.yml", "apps/web/package.json"}
+	client.repositoryFilesByRef["head-sha"] = append([]string(nil), client.repositoryFilesByRef["base-sha"]...)
+	client.filesByKey[fileKey("package.json", "base-sha")] = yarnBerryWorkspaceRootPackageJSON()
+	client.filesByKey[fileKey("package.json", "head-sha")] = yarnBerryWorkspaceRootPackageJSON()
+	client.filesByKey[fileKey(".yarnrc.yml", "base-sha")] = []byte("nodeLinker: node-modules\n")
+	client.filesByKey[fileKey(".yarnrc.yml", "head-sha")] = []byte("nodeLinker: pnp\n")
+	client.filesByKey[fileKey("apps/web/package.json", "base-sha")] = yarnBerryPackageJSON("", nil, nil, nil)
+	client.filesByKey[fileKey("apps/web/package.json", "head-sha")] = yarnBerryPackageJSON("", map[string]string{"left-pad": "^1.0.0"}, nil, nil)
+	client.filesByKey[fileKey("yarn.lock", "base-sha")] = yarnBerryLock(``)
+	client.filesByKey[fileKey("yarn.lock", "head-sha")] = yarnBerryLock(`
+"left-pad@npm:^1.0.0":
+  version: 1.0.1
+  resolution: "left-pad@npm:1.0.1"
+`)
+	client.files = []ghclient.PullRequestFile{
+		{Filename: "apps/web/package.json", Status: "modified"},
+		{Filename: "yarn.lock", Status: "modified"},
+		{Filename: ".yarnrc.yml", Status: "modified"},
+	}
+	stdout, _, err = runPRWithClient(t, client, RunPROptions{Format: "json", Paths: []string{"apps/web/package.json"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload := decodeJSONReport(t, stdout)
+	change = findChange(t, payload, "left-pad")
+	if change.Target != "apps/web" || change.Manifest != "apps/web/package.json" {
+		t.Fatalf("expected exact nested manifest target, got %#v", change)
+	}
+	if !hasNote(payload.Notes, analysis.NoteYarnNodeLinker) {
+		t.Fatalf("expected root .yarnrc.yml nodeLinker note for nested target, got %#v", payload.Notes)
 	}
 }
 
@@ -376,4 +597,22 @@ func yarnBerryWorkspaceRootPackageJSON() []byte {
 
 func yarnBerryLock(entries string) []byte {
 	return []byte("__metadata:\n  version: 8\n  cacheKey: 10\n" + entries)
+}
+
+func mustParsePackageManifest(t *testing.T, data []byte) *npm.PackageManifest {
+	t.Helper()
+	manifest, err := npm.ParsePackageManifest(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return manifest
+}
+
+func mustParseYarnBerryLock(t *testing.T, data []byte) npm.YarnBerryLockfile {
+	t.Helper()
+	lockfile, err := npm.ParseYarnBerryLockfile(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return lockfile
 }

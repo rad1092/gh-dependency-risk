@@ -234,6 +234,48 @@ func (l YarnBerryLockfile) FindEntry(name, requirement string) (YarnBerryEntry, 
 	return matches[0], true
 }
 
+func (l YarnBerryLockfile) ResolveDirectEntry(name, requirement string) (YarnBerryEntry, bool, []YarnBerryUnsupportedEntry) {
+	requirement = strings.TrimSpace(requirement)
+	matches := make([]YarnBerryEntry, 0)
+	virtualMatches := make([]YarnBerryEntry, 0)
+	for _, entry := range l.Entries {
+		if entry.Name != name {
+			continue
+		}
+		if entry.MatchesRequirement(requirement) && !entry.HasVirtualDescriptor() {
+			return entry, true, nil
+		}
+		if entry.HasVirtualDescriptor() {
+			virtualMatches = append(virtualMatches, entry)
+			continue
+		}
+		matches = append(matches, entry)
+	}
+	switch len(matches) {
+	case 0:
+		if len(virtualMatches) > 0 {
+			return YarnBerryEntry{}, false, []YarnBerryUnsupportedEntry{{
+				Descriptor: name,
+				Reason:     "Yarn Berry virtual lockfile entries cannot be matched to direct dependency declarations",
+			}}
+		}
+		return YarnBerryEntry{}, false, nil
+	case 1:
+		if len(virtualMatches) > 0 {
+			return YarnBerryEntry{}, false, []YarnBerryUnsupportedEntry{{
+				Descriptor: name,
+				Reason:     "ambiguous Yarn Berry lockfile entries for direct dependency",
+			}}
+		}
+		return matches[0], true, nil
+	default:
+		return YarnBerryEntry{}, false, []YarnBerryUnsupportedEntry{{
+			Descriptor: name,
+			Reason:     "ambiguous Yarn Berry lockfile entries for direct dependency",
+		}}
+	}
+}
+
 func (e YarnBerryEntry) MatchesRequirement(requirement string) bool {
 	if requirement == "" {
 		return false
@@ -258,6 +300,19 @@ func (e YarnBerryEntry) MatchesRequirement(requirement string) bool {
 	}
 	_, ok := candidates[requirement]
 	return ok
+}
+
+func (e YarnBerryEntry) HasVirtualDescriptor() bool {
+	if yarnBerryProtocol(e.Reference) == "virtual" || yarnBerryProtocol(e.Resolution) == "virtual" {
+		return true
+	}
+	for _, descriptor := range e.Descriptors {
+		parsed := parseYarnBerryDescriptor(descriptor)
+		if parsed.Protocol == "virtual" {
+			return true
+		}
+	}
+	return false
 }
 
 func (e YarnBerryEntry) Source(requirement string) string {
@@ -400,7 +455,7 @@ func yarnBerryProtocol(value string) string {
 	if index := strings.Index(trimmed, ":"); index > 0 {
 		prefix := strings.ToLower(trimmed[:index])
 		switch prefix {
-		case "npm", "workspace", "portal", "link", "file", "patch", "git", "github", "http", "https":
+		case "npm", "workspace", "portal", "link", "file", "patch", "git", "github", "http", "https", "virtual":
 			return prefix
 		}
 	}
