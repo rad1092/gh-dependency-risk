@@ -1,4 +1,4 @@
-module gh-dep-risk
+module github.com/rad1092/gh-dependency-risk
 
 go 1.26
 

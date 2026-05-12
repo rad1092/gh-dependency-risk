@@ -3,9 +3,9 @@ package app
 import (
 	"context"
 
-	"gh-dep-risk/internal/analysis"
-	ghclient "gh-dep-risk/internal/github"
-	"gh-dep-risk/internal/review"
+	"github.com/rad1092/gh-dependency-risk/internal/analysis"
+	ghclient "github.com/rad1092/gh-dependency-risk/internal/github"
+	"github.com/rad1092/gh-dependency-risk/internal/review"
 )
 
 type dependencyReviewSnapshot struct {

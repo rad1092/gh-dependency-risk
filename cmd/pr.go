@@ -9,11 +9,11 @@ import (
 	"os"
 	"strings"
 
-	"gh-dep-risk/internal/analysis"
-	"gh-dep-risk/internal/app"
-	"gh-dep-risk/internal/config"
-	ghclient "gh-dep-risk/internal/github"
-	"gh-dep-risk/internal/npm"
+	"github.com/rad1092/gh-dependency-risk/internal/analysis"
+	"github.com/rad1092/gh-dependency-risk/internal/app"
+	"github.com/rad1092/gh-dependency-risk/internal/config"
+	ghclient "github.com/rad1092/gh-dependency-risk/internal/github"
+	"github.com/rad1092/gh-dependency-risk/internal/npm"
 )
 
 type multiStringFlag []string
@@ -42,7 +42,7 @@ func runPR(stdout, stderr io.Writer, args []string) int {
 	fs.StringVar(&opts.Lang, "lang", defaults.Lang, "output language: ko|en")
 	fs.BoolVar(&opts.Comment, "comment", false, "upsert a PR timeline comment")
 	fs.StringVar(&failLevel, "fail-level", string(defaults.FailLevel), "fail threshold: low|medium|high|critical|none")
-	fs.BoolVar(&opts.NoRegistry, "no-registry", false, "skip external package registry lookups")
+	fs.BoolVar(&opts.NoRegistry, "no-registry", false, "skip npm-compatible registry publish-age lookups")
 	fs.StringVar(&opts.BundleDir, "bundle-dir", defaults.BundleDir, "write human/json/markdown bundle files to a directory")
 	fs.Var(&paths, "path", "restrict analysis to a repo-relative directory or exact manifest path (repeatable)")
 	fs.BoolVar(&opts.ListTargets, "list-targets", defaults.ListTargets, "print detected dependency analysis targets and exit")
@@ -183,7 +183,7 @@ func printPRUsage(w io.Writer) {
 	fmt.Fprintln(w, "  -fail-level string")
 	fmt.Fprintln(w, "    \tfail threshold: low|medium|high|critical|none (default \"none\")")
 	fmt.Fprintln(w, "  -no-registry")
-	fmt.Fprintln(w, "    \tskip external package registry lookups")
+	fmt.Fprintln(w, "    \tskip npm-compatible registry publish-age lookups")
 	fmt.Fprintln(w, "  -bundle-dir string")
 	fmt.Fprintln(w, "    \twrite human/json/markdown bundle files to a directory")
 	fmt.Fprintln(w, "  -path value")

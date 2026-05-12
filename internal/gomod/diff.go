@@ -6,7 +6,7 @@ import (
 	"sort"
 	"strings"
 
-	"gh-dep-risk/internal/analysis"
+	"github.com/rad1092/gh-dependency-risk/internal/analysis"
 )
 
 var pseudoVersionPattern = regexp.MustCompile(`^v\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\.0)?\.\d{14}-[0-9a-f]{12,}$|^v\d+\.\d+\.\d+-\d{14}-[0-9a-f]{12,}$`)

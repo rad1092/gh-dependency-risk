@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"gh-dep-risk/internal/analysis"
+	"github.com/rad1092/gh-dependency-risk/internal/analysis"
 )
 
 type PullRequestMetadata struct {

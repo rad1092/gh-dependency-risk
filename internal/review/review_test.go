@@ -3,7 +3,7 @@ package review
 import (
 	"testing"
 
-	ghclient "gh-dep-risk/internal/github"
+	ghclient "github.com/rad1092/gh-dependency-risk/internal/github"
 )
 
 func TestNormalizeChangesSupportsMixedEcosystems(t *testing.T) {

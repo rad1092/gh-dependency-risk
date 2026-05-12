@@ -4,9 +4,9 @@ import (
 	"strings"
 	"testing"
 
-	"gh-dep-risk/internal/analysis"
-	ghclient "gh-dep-risk/internal/github"
 	"github.com/cli/go-gh/v2/pkg/api"
+	"github.com/rad1092/gh-dependency-risk/internal/analysis"
+	ghclient "github.com/rad1092/gh-dependency-risk/internal/github"
 )
 
 func TestRunPRGoModTargetDiscoveryShowsLocalFallback(t *testing.T) {

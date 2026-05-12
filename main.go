@@ -3,7 +3,7 @@ package main
 import (
 	"os"
 
-	"gh-dep-risk/cmd"
+	"github.com/rad1092/gh-dependency-risk/cmd"
 )
 
 func main() {

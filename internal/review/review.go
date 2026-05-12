@@ -5,7 +5,7 @@ import (
 	"sort"
 	"strings"
 
-	ghclient "gh-dep-risk/internal/github"
+	ghclient "github.com/rad1092/gh-dependency-risk/internal/github"
 )
 
 type Ecosystem string

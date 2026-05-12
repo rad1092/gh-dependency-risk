@@ -7,9 +7,9 @@ import (
 	"strings"
 	"testing"
 
-	"gh-dep-risk/internal/analysis"
-	"gh-dep-risk/internal/app"
-	"gh-dep-risk/internal/config"
+	"github.com/rad1092/gh-dependency-risk/internal/analysis"
+	"github.com/rad1092/gh-dependency-risk/internal/app"
+	"github.com/rad1092/gh-dependency-risk/internal/config"
 )
 
 func TestApplyPRConfigUsesConfigWhenFlagsAbsent(t *testing.T) {

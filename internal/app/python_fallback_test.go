@@ -6,10 +6,10 @@ import (
 	"strings"
 	"testing"
 
-	"gh-dep-risk/internal/analysis"
-	ghclient "gh-dep-risk/internal/github"
-	"gh-dep-risk/internal/render"
 	"github.com/cli/go-gh/v2/pkg/api"
+	"github.com/rad1092/gh-dependency-risk/internal/analysis"
+	ghclient "github.com/rad1092/gh-dependency-risk/internal/github"
+	"github.com/rad1092/gh-dependency-risk/internal/render"
 )
 
 func TestRunPRPythonRequirementsFallbackAdded(t *testing.T) {

@@ -36,7 +36,7 @@ on:
         default: false
         type: boolean
       no_registry:
-        description: "Skip npm registry lookups"
+        description: "Skip npm-compatible registry publish-age lookups"
         required: false
         default: false
         type: boolean

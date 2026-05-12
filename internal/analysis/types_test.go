@@ -3,7 +3,7 @@ package analysis
 import (
 	"testing"
 
-	"gh-dep-risk/internal/npm"
+	"github.com/rad1092/gh-dependency-risk/internal/npm"
 )
 
 func TestCollectRegistryTargetsSkipsLocalWorkspacePackages(t *testing.T) {

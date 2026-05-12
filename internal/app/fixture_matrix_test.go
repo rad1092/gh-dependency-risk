@@ -4,9 +4,9 @@ import (
 	"encoding/json"
 	"testing"
 
-	ghclient "gh-dep-risk/internal/github"
-	"gh-dep-risk/internal/render"
 	"github.com/cli/go-gh/v2/pkg/api"
+	ghclient "github.com/rad1092/gh-dependency-risk/internal/github"
+	"github.com/rad1092/gh-dependency-risk/internal/render"
 )
 
 func TestRunPRTargetShapeMatrix(t *testing.T) {

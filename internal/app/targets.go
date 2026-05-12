@@ -8,11 +8,11 @@ import (
 	"sort"
 	"strings"
 
-	"gh-dep-risk/internal/analysis"
-	ghclient "gh-dep-risk/internal/github"
-	"gh-dep-risk/internal/npm"
-	pythondeps "gh-dep-risk/internal/python"
-	"gh-dep-risk/internal/review"
+	"github.com/rad1092/gh-dependency-risk/internal/analysis"
+	ghclient "github.com/rad1092/gh-dependency-risk/internal/github"
+	"github.com/rad1092/gh-dependency-risk/internal/npm"
+	pythondeps "github.com/rad1092/gh-dependency-risk/internal/python"
+	"github.com/rad1092/gh-dependency-risk/internal/review"
 )
 
 type repoDataCache struct {

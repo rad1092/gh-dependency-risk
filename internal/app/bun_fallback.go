@@ -7,8 +7,8 @@ import (
 	"sort"
 	"strings"
 
-	"gh-dep-risk/internal/analysis"
-	"gh-dep-risk/internal/npm"
+	"github.com/rad1092/gh-dependency-risk/internal/analysis"
+	"github.com/rad1092/gh-dependency-risk/internal/npm"
 )
 
 const packageManagerBun = "bun"

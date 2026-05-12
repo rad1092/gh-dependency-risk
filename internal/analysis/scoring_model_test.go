@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"gh-dep-risk/internal/npm"
+	"github.com/rad1092/gh-dependency-risk/internal/npm"
 )
 
 func TestScoreDriverContributions(t *testing.T) {

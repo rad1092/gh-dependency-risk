@@ -26,7 +26,7 @@ Linux or macOS:
 VERSION=vX.Y.Z
 COMMIT=$(git rev-parse --short HEAD)
 DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-go build -ldflags "-s -w -X gh-dep-risk/cmd.version=${VERSION} -X gh-dep-risk/cmd.commit=${COMMIT} -X gh-dep-risk/cmd.date=${DATE}" -o gh-dep-risk .
+go build -ldflags "-s -w -X github.com/rad1092/gh-dependency-risk/cmd.version=${VERSION} -X github.com/rad1092/gh-dependency-risk/cmd.commit=${COMMIT} -X github.com/rad1092/gh-dependency-risk/cmd.date=${DATE}" -o gh-dep-risk .
 ./gh-dep-risk version
 ./gh-dep-risk version --json
 ```
@@ -37,7 +37,7 @@ Windows PowerShell:
 $version = "vX.Y.Z"
 $commit = git rev-parse --short HEAD
 $date = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
-go build -ldflags "-s -w -X gh-dep-risk/cmd.version=$version -X gh-dep-risk/cmd.commit=$commit -X gh-dep-risk/cmd.date=$date" -o gh-dep-risk.exe .
+go build -ldflags "-s -w -X github.com/rad1092/gh-dependency-risk/cmd.version=$version -X github.com/rad1092/gh-dependency-risk/cmd.commit=$commit -X github.com/rad1092/gh-dependency-risk/cmd.date=$date" -o gh-dep-risk.exe .
 .\gh-dep-risk.exe version
 .\gh-dep-risk.exe version --json
 ```

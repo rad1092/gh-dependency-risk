@@ -12,12 +12,12 @@ import (
 	"strings"
 	"time"
 
-	"gh-dep-risk/internal/analysis"
-	ghclient "gh-dep-risk/internal/github"
-	gomoddeps "gh-dep-risk/internal/gomod"
-	"gh-dep-risk/internal/npm"
-	pythondeps "gh-dep-risk/internal/python"
-	"gh-dep-risk/internal/render"
+	"github.com/rad1092/gh-dependency-risk/internal/analysis"
+	ghclient "github.com/rad1092/gh-dependency-risk/internal/github"
+	gomoddeps "github.com/rad1092/gh-dependency-risk/internal/gomod"
+	"github.com/rad1092/gh-dependency-risk/internal/npm"
+	pythondeps "github.com/rad1092/gh-dependency-risk/internal/python"
+	"github.com/rad1092/gh-dependency-risk/internal/render"
 )
 
 type RunPROptions struct {
@@ -113,7 +113,7 @@ func RunPR(ctx context.Context, deps RunPRDependencies, opts RunPROptions) error
 	for _, target := range resolvedTargets {
 		reviewChanges := append([]analysis.ReviewChange(nil), reviewChangesForTarget(reviewSnapshot.TargetChanges, target)...)
 		if !reviewSnapshot.Available && !target.LocalFallback {
-			return &ExitError{Code: 1, Err: fmt.Errorf("dependency review is unavailable and %s cannot be analyzed with local fallback in this release. Pass a PR from a repository where GitHub dependency review is enabled, or narrow to an npm/pnpm/yarn/bun/python direct/poetry target with a supported manifest", target.ManifestPath)}
+			return &ExitError{Code: 1, Err: fmt.Errorf("dependency review is unavailable and %s cannot be analyzed with local fallback in this release. Pass a PR from a repository where GitHub dependency review is enabled, or narrow to an npm/pnpm/yarn/bun/python direct/poetry/go target with a supported manifest", target.ManifestPath)}
 		}
 		if shouldUsePythonLocalFallback(target, reviewSnapshot.Available) {
 			input, err := loadPythonLocalInput(ctx, cache, pr.BaseSHA, pr.HeadSHA, target)

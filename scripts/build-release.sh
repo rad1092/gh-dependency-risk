@@ -43,7 +43,7 @@ for platform in "${platforms[@]}"; do
   CGO_ENABLED=0 \
   go build \
     -trimpath \
-    -ldflags="-s -w -X gh-dep-risk/cmd.version=${version} -X gh-dep-risk/cmd.commit=${commit} -X gh-dep-risk/cmd.date=${date}" \
+    -ldflags="-s -w -X github.com/rad1092/gh-dependency-risk/cmd.version=${version} -X github.com/rad1092/gh-dependency-risk/cmd.commit=${commit} -X github.com/rad1092/gh-dependency-risk/cmd.date=${date}" \
     -o "dist/${platform}${ext}" \
     .
 done

@@ -1,4 +1,4 @@
-package main
+package hygiene_test
 
 import (
 	"os"
@@ -8,9 +8,10 @@ import (
 )
 
 func TestPublicDocsUseCurrentRepositorySlugForBadges(t *testing.T) {
+	root := repoRoot(t)
 	currentRemoteSlug := "rad1092/gh-dependency-risk"
 
-	data, err := os.ReadFile("README.md")
+	data, err := os.ReadFile(filepath.Join(root, "README.md"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -27,7 +28,8 @@ func TestPublicDocsUseCurrentRepositorySlugForBadges(t *testing.T) {
 }
 
 func TestInstallSmokeKeepsStableCommandName(t *testing.T) {
-	data, err := os.ReadFile(filepath.Join(".github", "workflows", "install-smoke.yml"))
+	root := repoRoot(t)
+	data, err := os.ReadFile(filepath.Join(root, ".github", "workflows", "install-smoke.yml"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -49,7 +51,8 @@ func TestInstallSmokeKeepsStableCommandName(t *testing.T) {
 }
 
 func TestManualWorkflowDoesNotRequireCrossRepoCommentToken(t *testing.T) {
-	data, err := os.ReadFile(filepath.Join(".github", "workflows", "dep-risk-manual.yml"))
+	root := repoRoot(t)
+	data, err := os.ReadFile(filepath.Join(root, ".github", "workflows", "dep-risk-manual.yml"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -67,4 +70,28 @@ func TestManualWorkflowDoesNotRequireCrossRepoCommentToken(t *testing.T) {
 	if !strings.Contains(content, "comment mode is limited to PRs in $DEFAULT_REPO") {
 		t.Fatal("dep-risk-manual.yml should guard against cross-repo comment mode")
 	}
+}
+
+func repoRoot(t *testing.T) string {
+	t.Helper()
+
+	dir, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for {
+		if fileExists(filepath.Join(dir, "go.mod")) && fileExists(filepath.Join(dir, "README.md")) {
+			return dir
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			t.Fatal("could not find repository root")
+		}
+		dir = parent
+	}
+}
+
+func fileExists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
 }

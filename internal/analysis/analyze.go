@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"gh-dep-risk/internal/npm"
+	"github.com/rad1092/gh-dependency-risk/internal/npm"
 )
 
 type candidateSummary struct {

@@ -3,7 +3,7 @@
 VERSION ?= dev
 COMMIT ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo none)
 DATE ?= $(shell git show -s --format=%cI HEAD 2>/dev/null || echo unknown)
-LDFLAGS = -s -w -X gh-dep-risk/cmd.version=$(VERSION) -X gh-dep-risk/cmd.commit=$(COMMIT) -X gh-dep-risk/cmd.date=$(DATE)
+LDFLAGS = -s -w -X github.com/rad1092/gh-dependency-risk/cmd.version=$(VERSION) -X github.com/rad1092/gh-dependency-risk/cmd.commit=$(COMMIT) -X github.com/rad1092/gh-dependency-risk/cmd.date=$(DATE)
 
 build:
 	go build -ldflags "$(LDFLAGS)" -o gh-dep-risk .

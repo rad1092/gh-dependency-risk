@@ -182,7 +182,7 @@ branch.
 - `--lang ko|en`
 - `--comment`
 - `--fail-level low|medium|high|critical|none`
-- `--no-registry`
+- `--no-registry` to skip npm-compatible registry publish-age lookups
 - `--bundle-dir <dir>`
 - `--path <repo-relative-dir-or-manifest>` repeatable
 - `--list-targets`
@@ -460,9 +460,13 @@ Notes:
 
 If dependency review returns `403` or `404`, `gh-dep-risk` falls back to
 supported local fallback analysis and explicitly reports
-`dependency_review_available=false`. Registry publish-age lookups are best
-effort and are skipped with `--no-registry`, but API-provided release-age
-signals remain available when GitHub already supplies them.
+`dependency_review_available=false`. Local fallback does not merge in missing
+Python, Go, Yarn, or Bun entries when Dependency Review is already available.
+Registry publish-age lookups are best effort and limited to npm-compatible
+registry packages from npm, pnpm, and Yarn-style targets. They are skipped with
+`--no-registry`, while API-provided release-age signals remain available when
+GitHub already supplies them. Python, Go, Poetry, uv, and Bun local fallback do
+not perform PyPI, Go module proxy, or Bun registry publish-age lookups.
 
 If there is no meaningful supported dependency change, the command exits with
 code `2`.
@@ -532,7 +536,7 @@ go build -o gh-dep-risk .
 Build with explicit metadata:
 
 ```bash
-go build -ldflags "-s -w -X gh-dep-risk/cmd.version=dev-local -X gh-dep-risk/cmd.commit=$(git rev-parse --short HEAD) -X gh-dep-risk/cmd.date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" -o gh-dep-risk .
+go build -ldflags "-s -w -X github.com/rad1092/gh-dependency-risk/cmd.version=dev-local -X github.com/rad1092/gh-dependency-risk/cmd.commit=$(git rev-parse --short HEAD) -X github.com/rad1092/gh-dependency-risk/cmd.date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" -o gh-dep-risk .
 ```
 
 Or use the `Makefile`:
@@ -547,7 +551,7 @@ Windows PowerShell:
 ```powershell
 $date = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
 $commit = git rev-parse --short HEAD
-go build -ldflags "-s -w -X gh-dep-risk/cmd.version=dev-local -X gh-dep-risk/cmd.commit=$commit -X gh-dep-risk/cmd.date=$date" -o gh-dep-risk.exe .
+go build -ldflags "-s -w -X github.com/rad1092/gh-dependency-risk/cmd.version=dev-local -X github.com/rad1092/gh-dependency-risk/cmd.commit=$commit -X github.com/rad1092/gh-dependency-risk/cmd.date=$date" -o gh-dep-risk.exe .
 .\gh-dep-risk.exe version --json
 ```
 
