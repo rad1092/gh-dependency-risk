@@ -31,16 +31,33 @@ Use the owned matrix repository for repeatable read-only analysis checks. These
 commands must not write PR comments:
 
 ```bash
-go build -o gh-dep-risk .
-./gh-dep-risk pr 3 --repo rad1092/gh-dep-risk-smoke-matrix --lang en --format json --no-registry
-./gh-dep-risk pr 1 --repo rad1092/gh-dep-risk-smoke-matrix --lang en --format json --no-registry
-./gh-dep-risk pr 2 --repo rad1092/gh-dep-risk-smoke-matrix --lang en --format json --no-registry
+gh dep-risk pr 3 --repo rad1092/gh-dep-risk-smoke-matrix --lang en --format json --no-registry
+gh dep-risk pr 1 --repo rad1092/gh-dep-risk-smoke-matrix --lang en --format json --no-registry
+gh dep-risk pr 2 --repo rad1092/gh-dep-risk-smoke-matrix --lang en --format json --no-registry
+gh dep-risk pr 4 --repo rad1092/gh-dep-risk-smoke-matrix --lang en --format json --no-registry
+gh dep-risk pr 5 --repo rad1092/gh-dep-risk-smoke-matrix --lang en --format json --no-registry
+gh dep-risk pr 6 --repo rad1092/gh-dep-risk-smoke-matrix --lang en --format json --no-registry
+gh dep-risk pr 7 --repo rad1092/gh-dep-risk-smoke-matrix --lang en --format json --no-registry
+gh dep-risk pr 8 --repo rad1092/gh-dep-risk-smoke-matrix --lang en --format json --no-registry
+gh dep-risk pr 9 --repo rad1092/gh-dep-risk-smoke-matrix --lang en --format json --no-registry
+gh dep-risk pr 10 --repo rad1092/gh-dep-risk-smoke-matrix --lang en --format json --no-registry
 ```
 
 Verify:
 
-- npm, pnpm workspace, and Yarn Classic standalone reports all render
+- supported fixture reports render for npm, pnpm workspace, Yarn Classic,
+  Python, Poetry, uv, Go modules, Yarn Berry, and Bun text lockfiles
 - JSON output includes `score`, `level`, and `dependency_review_available`
+- `dependency_review_available=false` is expected for local fallback fixtures
+
+The Bun binary lockfile fixture is unsupported-only by design:
+
+```bash
+gh dep-risk pr 11 --repo rad1092/gh-dep-risk-smoke-matrix --lang en --format json --no-registry
+```
+
+For PR `#11`, exit code `2` is expected because `bun.lockb` is not parsed and
+no scored dependency change is invented.
 
 Current owned live read-only fixture coverage:
 
@@ -49,10 +66,20 @@ Current owned live read-only fixture coverage:
 | `rad1092/gh-dep-risk-smoke-matrix` | `#3` | npm `package.json` + `package-lock.json` |
 | `rad1092/gh-dep-risk-smoke-matrix` | `#1` | pnpm `package.json` + `pnpm-lock.yaml` with workspace discovery |
 | `rad1092/gh-dep-risk-smoke-matrix` | `#2` | Yarn Classic `package.json` + `yarn.lock` |
+| `rad1092/gh-dep-risk-smoke-matrix` | `#4` | Python `requirements.txt` |
+| `rad1092/gh-dep-risk-smoke-matrix` | `#5` | Python PEP 621 `pyproject.toml` |
+| `rad1092/gh-dep-risk-smoke-matrix` | `#6` | Poetry `pyproject.toml` + `poetry.lock` |
+| `rad1092/gh-dep-risk-smoke-matrix` | `#7` | uv `pyproject.toml` + `uv.lock` |
+| `rad1092/gh-dep-risk-smoke-matrix` | `#8` | Go modules `go.mod` + `go.sum` checksum evidence |
+| `rad1092/gh-dep-risk-smoke-matrix` | `#9` | Yarn Berry / modern Yarn `package.json` + `yarn.lock` |
+| `rad1092/gh-dep-risk-smoke-matrix` | `#10` | Bun `package.json` + text `bun.lock` |
+| `rad1092/gh-dep-risk-smoke-matrix` | `#11` | Bun `bun.lockb` unsupported-only behavior |
 
-Do not document a live smoke command for another ecosystem until a stable owned
-fixture PR exists. Until then, rely on repo tests and local fixture-backed
-checks for the broader local fallback matrix.
+Phase 6A validated the expanded fixtures with a local binary built from
+`a8252d281537968aef65e680583e5208df4d79ce`. Installed extensions older than
+that commit may not validate the newer fixture PRs until a release catches up.
+For unreleased validation, use the same arguments with `./gh-dep-risk` or the
+platform-specific local binary path instead of `gh dep-risk`.
 
 ### Local fallback support smoke matrix
 
@@ -102,8 +129,18 @@ For owned live smoke runs:
 gh workflow run .github/workflows/dep-risk-manual.yml -f pr=3 -f repo=rad1092/gh-dep-risk-smoke-matrix -f no_registry=true
 gh workflow run .github/workflows/dep-risk-manual.yml -f pr=1 -f repo=rad1092/gh-dep-risk-smoke-matrix -f no_registry=true
 gh workflow run .github/workflows/dep-risk-manual.yml -f pr=2 -f repo=rad1092/gh-dep-risk-smoke-matrix -f no_registry=true
+gh workflow run .github/workflows/dep-risk-manual.yml -f pr=4 -f repo=rad1092/gh-dep-risk-smoke-matrix -f no_registry=true
+gh workflow run .github/workflows/dep-risk-manual.yml -f pr=5 -f repo=rad1092/gh-dep-risk-smoke-matrix -f no_registry=true
+gh workflow run .github/workflows/dep-risk-manual.yml -f pr=6 -f repo=rad1092/gh-dep-risk-smoke-matrix -f no_registry=true
+gh workflow run .github/workflows/dep-risk-manual.yml -f pr=7 -f repo=rad1092/gh-dep-risk-smoke-matrix -f no_registry=true
+gh workflow run .github/workflows/dep-risk-manual.yml -f pr=8 -f repo=rad1092/gh-dep-risk-smoke-matrix -f no_registry=true
+gh workflow run .github/workflows/dep-risk-manual.yml -f pr=9 -f repo=rad1092/gh-dep-risk-smoke-matrix -f no_registry=true
+gh workflow run .github/workflows/dep-risk-manual.yml -f pr=10 -f repo=rad1092/gh-dep-risk-smoke-matrix -f no_registry=true
 gh run watch
 ```
+
+PR `#11` can also be dispatched as an unsupported-only check; exit code `2` is
+expected for that fixture.
 
 For comment smoke, run the target smoke repository's own workflow:
 

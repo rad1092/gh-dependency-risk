@@ -145,14 +145,15 @@ Typical read-only live checks against owned fixture repositories:
 
 ```bash
 gh dep-risk pr 3 --repo rad1092/gh-dep-risk-smoke-matrix --lang en --format json --no-registry
-gh dep-risk pr 1 --repo rad1092/gh-dep-risk-smoke-matrix --lang en --format json --no-registry
-gh dep-risk pr 2 --repo rad1092/gh-dep-risk-smoke-matrix --lang en --format json --no-registry
+gh dep-risk pr 4 --repo rad1092/gh-dep-risk-smoke-matrix --lang en --format json --no-registry
+gh dep-risk pr 10 --repo rad1092/gh-dep-risk-smoke-matrix --lang en --format json --no-registry
 ```
 
-The matrix repository currently covers read-only npm, pnpm workspace, and Yarn
-Classic analysis. Broader local fallback coverage is documented in
-[docs/smoke-test.md](docs/smoke-test.md) and backed by repo tests unless an
-owned live fixture PR is listed there.
+The owned smoke matrix covers npm, pnpm workspace, Yarn Classic, Python
+requirements, Python PEP 621, Poetry, uv, Go modules, Yarn Berry, Bun text
+`bun.lock`, and `bun.lockb` unsupported-only behavior. See
+[docs/smoke-test.md](docs/smoke-test.md) for the full command matrix and the
+separate unsupported-only fixture.
 
 Comment smoke is intentionally separate because it writes a PR timeline issue
 comment:

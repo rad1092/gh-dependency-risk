@@ -4,6 +4,9 @@ All notable changes to `gh-dep-risk` will be documented in this file.
 
 ## Unreleased
 
+- Documented the expanded owned live smoke fixture matrix covering Python,
+  Poetry, uv, Go modules, Yarn Berry, Bun text lockfile, and `bun.lockb`
+  unsupported-only behavior.
 - Cleaned up docs, examples, and smoke-test guidance to separate Dependency
   Review API coverage from local fallback support and document the expanded
   Python, Go, Yarn Berry, and Bun scope without overstating unsupported
