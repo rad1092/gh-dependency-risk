@@ -70,7 +70,7 @@ jobs:
         shell: bash
         run: >
           go build
-          -ldflags "-s -w -X gh-dep-risk/cmd.version=${BUILD_VERSION} -X gh-dep-risk/cmd.commit=${BUILD_COMMIT} -X gh-dep-risk/cmd.date=${BUILD_DATE}"
+          -ldflags "-s -w -X github.com/rad1092/gh-dependency-risk/cmd.version=${BUILD_VERSION} -X github.com/rad1092/gh-dependency-risk/cmd.commit=${BUILD_COMMIT} -X github.com/rad1092/gh-dependency-risk/cmd.date=${BUILD_DATE}"
           -o gh-dep-risk
           .
 
