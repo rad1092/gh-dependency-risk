@@ -4,6 +4,8 @@ All notable changes to `gh-dep-risk` will be documented in this file.
 
 ## Unreleased
 
+## v0.2.0 - 2026-05-12
+
 - Documented the expanded owned live smoke fixture matrix covering Python,
   Poetry, uv, Go modules, Yarn Berry, Bun text lockfile, and `bun.lockb`
   unsupported-only behavior.
